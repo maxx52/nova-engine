@@ -1,0 +1,18 @@
+{
+  "name": "nova-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev -w @nova/api\" \"npm run dev -w @nova/storefront\"",
+    "build": "npm run build -w @nova/storefront",
+    "dev:web": "npm run dev -w @nova/storefront",
+    "dev:api": "npm run dev -w @nova/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
