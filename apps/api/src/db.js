@@ -22,6 +22,16 @@ export async function initDatabase() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(100) NOT NULL DEFAULT ''`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0)`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE`)
+  await pool.query(`CREATE TABLE IF NOT EXISTS categories (
+    id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE,
+    parent_id BIGINT REFERENCES categories(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`)
+  await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
   const result = await pool.query('SELECT COUNT(*)::integer AS count FROM products')
   if(result.rows[0].count === 0) {
     for(const [name,category,price,description] of seeds)
