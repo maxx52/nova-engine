@@ -3,6 +3,10 @@ import { ref, computed, onMounted } from 'vue'
 
 const products = ref([])
 const search = ref('')
+const attributeFilter = ref('')
+const categoryRows = ref([])
+const availableAttributes = computed(()=>[...new Set(products.value.filter(p=>selectedCategory.value==='Все товары'||p.category===selectedCategory.value).flatMap(p=>(p.attributes||[]).map(a=>a.name+'::'+a.value)))].sort())
+const descendantNames = computed(()=>{const chosen=categoryRows.value.find(c=>c.name===selectedCategory.value);if(!chosen)return [];const ids=new Set([chosen.id]);let changed=true;while(changed){changed=false;for(const c of categoryRows.value)if(ids.has(c.parent_id)&&!ids.has(c.id)){ids.add(c.id);changed=true}}return categoryRows.value.filter(c=>ids.has(c.id)).map(c=>c.name)})
 const cart = ref([])
 const loading = ref(true)
 const error = ref('')
@@ -27,8 +31,9 @@ const art = {
 const productIcons = ['🎧','💡','🎒','☕','⌨️','🗂️']
 const categories = computed(() => ['Все товары', ...new Set(products.value.map(p => p.category))])
 const visibleProducts = computed(() => products.value.filter(p =>
-  (selectedCategory.value === 'Все товары' || p.category === selectedCategory.value) &&
-  p.name.toLowerCase().includes(search.value.trim().toLowerCase())
+  (selectedCategory.value === 'Все товары' || descendantNames.value.includes(p.category)) &&
+  (!attributeFilter.value || (p.attributes||[]).some(a=>a.name+'::'+a.value===attributeFilter.value)) &&
+  [p.name,p.sku,p.description,...(p.attributes||[]).flatMap(a=>[a.name,a.value])].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())
 ))
 const itemCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0))
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0))
@@ -55,6 +60,7 @@ onMounted(async () => {
     const response = await fetch('/api/products')
     if (!response.ok) throw new Error('Не удалось получить товары')
     products.value = (await response.json()).filter(p=>p.published!==false)
+    const cats=await fetch('/api/categories');if(cats.ok)categoryRows.value=await cats.json()
     syncUrl()
   } catch (e) { error.value = e.message }
   finally { loading.value = false }
@@ -63,7 +69,7 @@ onMounted(async () => {
 
 <template>
   <div class="site-shell">
-    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.6</span></div>
+    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.7</span></div>
     <header class="site-header">
       <div class="container header-inner">
         <a href="#" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>
@@ -106,7 +112,7 @@ onMounted(async () => {
 
       <section class="catalog-section container" id="catalog">
         <div class="section-heading"><div><span class="section-kicker">НАШ АССОРТИМЕНТ</span><h2>Популярные товары<span class="heading-period">.</span></h2><p>Откройте для себя что-то новое.</p></div><span class="catalog-count">Найдено: {{ visibleProducts.length }}</span></div>
-        <div class="toolbar"><div class="category-tabs"><button v-for="category in categories" :key="category" :class="{ active: selectedCategory === category }" @click="selectedCategory = category">{{ category }}</button></div><label class="search-box"><span>⌕</span><input v-model="search" placeholder="Поиск товаров..." aria-label="Поиск товаров"></label></div>
+        <div class="toolbar"><div class="category-tabs"><button v-for="category in categories" :key="category" :class="{ active: selectedCategory === category }" @click="selectedCategory = category;attributeFilter = ''">{{ category }}</button></div><select v-model="attributeFilter" aria-label="Фильтр характеристик" class="catalog-filter"><option value="">Все характеристики</option><option v-for="attr in availableAttributes" :key="attr" :value="attr">{{attr.replace('::',' — ')}}</option></select><label class="search-box"><span>⌕</span><input v-model="search" placeholder="Поиск товаров..." aria-label="Поиск товаров"></label></div>
         <p v-if="error" class="error-message">{{ error }}. Проверь, запущен ли API на порту 3001.</p>
         <p v-if="loading" class="empty-state">Загружаем каталог…</p>
         <div v-else-if="visibleProducts.length" class="product-grid">
