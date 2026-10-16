@@ -45,7 +45,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.6.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.7.0', database: 'connected' }
 })
 app.get('/api/products', async () => {
   const result = await pool.query('SELECT '+productFields+' FROM products ORDER BY id')
@@ -76,16 +76,26 @@ app.delete('/api/products/:id', { preHandler: requireAdmin }, async (request, re
   if (!result.rowCount) return reply.code(404).send({error:'Товар не найден'})
   return reply.code(204).send()
 })
+function validTemplates(v){return Array.isArray(v)&&v.length<=50&&v.every(x=>typeof x==='string'&&x.trim()&&x.length<=80)&&new Set(v.map(x=>x.trim().toLowerCase())).size===v.length}
+app.put('/api/categories/:id',{preHandler:requireAdmin},async(req,reply)=>{
+ const id=Number(req.params.id),{name,parent_id=null,attribute_templates=[]}=req.body||{}
+ if(!Number.isSafeInteger(id)||id<=0||typeof name!=='string'||!name.trim()||name.length>100||!validTemplates(attribute_templates))return reply.code(400).send({error:'Некорректные данные категории'})
+ if(parent_id!==null&&(!Number.isSafeInteger(parent_id)||parent_id<=0))return reply.code(400).send({error:'Некорректный родитель'})
+ if(parent_id===id)return reply.code(400).send({error:'Категория не может быть родителем самой себе'})
+ if(parent_id!==null){const tree=await pool.query('WITH RECURSIVE descendants AS (SELECT id FROM categories WHERE id=$1 UNION ALL SELECT c.id FROM categories c JOIN descendants d ON c.parent_id=d.id) SELECT id FROM descendants',[id]);if(tree.rows.some(r=>Number(r.id)===parent_id))return reply.code(400).send({error:'Нельзя создать цикл категорий'})}
+ try{const result=await pool.query('UPDATE categories SET name=$1,parent_id=$2,attribute_templates=$3 WHERE id=$4 RETURNING id,name,parent_id,attribute_templates',[name.trim(),parent_id,JSON.stringify(attribute_templates),id]);if(!result.rowCount)return reply.code(404).send({error:'Категория не найдена'});return {...result.rows[0],id:Number(result.rows[0].id),parent_id:result.rows[0].parent_id===null?null:Number(result.rows[0].parent_id)}}catch(e){if(e.code==='23505')return reply.code(409).send({error:'Название занято'});if(e.code==='23503')return reply.code(400).send({error:'Родитель не найден'});throw e}
+})
 app.get('/api/categories', async () => {
-  const result = await pool.query('SELECT id,name,parent_id FROM categories ORDER BY name')
+  const result = await pool.query('SELECT id,name,parent_id,attribute_templates FROM categories ORDER BY name')
   return result.rows.map(row => ({...row,id:Number(row.id),parent_id:row.parent_id===null?null:Number(row.parent_id)}))
 })
 app.post('/api/categories',{preHandler:requireAdmin},async(request,reply)=>{
-  const { name,parent_id=null }=request.body || {}
+  const { name,parent_id=null,attribute_templates=[] }=request.body || {}
+  if(!validTemplates(attribute_templates))return reply.code(400).send({error:'Некорректные шаблоны характеристик'})
   if(typeof name!=='string'||!name.trim()||name.length>100) return reply.code(400).send({error:'Некорректное название категории'})
   if(parent_id!==null && (!Number.isSafeInteger(parent_id)||parent_id<=0)) return reply.code(400).send({error:'Некорректная родительская категория'})
   try{
-    const result=await pool.query('INSERT INTO categories (name,parent_id) VALUES ($1,$2) RETURNING id,name,parent_id',[name.trim(),parent_id])
+    const result=await pool.query('INSERT INTO categories (name,parent_id,attribute_templates) VALUES ($1,$2,$3) RETURNING id,name,parent_id,attribute_templates',[name.trim(),parent_id,JSON.stringify(attribute_templates)])
     return reply.code(201).send({...result.rows[0],id:Number(result.rows[0].id)})
   }catch(e){
     if(e.code==='23505') return reply.code(409).send({error:'Такая категория уже существует'})
