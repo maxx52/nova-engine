@@ -26,6 +26,8 @@ export async function initDatabase() {
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0)`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb`)
+  await pool.query(`UPDATE products SET images=jsonb_build_array(image_url) WHERE jsonb_array_length(images)=0 AND image_url<>''`)
   await pool.query(`CREATE TABLE IF NOT EXISTS categories (
     id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE,
     parent_id BIGINT REFERENCES categories(id) ON DELETE SET NULL,
