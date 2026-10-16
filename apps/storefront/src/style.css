@@ -20,3 +20,9 @@
 .detail-info h2{font-size:19px;margin-top:46px}
 .detail-description{line-height:1.85;color:#6e7e75;white-space:pre-wrap}
 @media(max-width:760px){.detail-layout{grid-template-columns:1fr;gap:28px}.detail-photo{min-height:320px}.detail-photo img{max-height:320px}}
+
+
+.variant-picker{margin:20px 0}.variant-picker strong{font-size:13px}.variant-picker>div{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.variant-picker button{border:1px solid #dfe9e2;border-radius:7px;background:#fff;padding:11px;font-size:12px}
+.variant-picker button.chosen{border-color:#33805a;background:#e9f4ed}.variant-picker button:disabled{opacity:.4;cursor:not-allowed}
+.detail-attributes{margin-top:34px}.detail-attributes>div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #e9eeea;padding:12px 0;font-size:13px}.detail-attributes span{color:#77877c}
