@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import ContentPage from './ContentPage.vue'
 import BlogView from './BlogView.vue'
 import {safeLink} from '../../../shared/contentSafety.js'
@@ -34,7 +34,13 @@ const selectedVariant = computed(()=>activeProduct.value?.variants?.[chosenVaria
 const currentImage = ref('')
 const productImages = computed(() => activeProduct.value ? (activeProduct.value.images?.length ? activeProduct.value.images : (activeProduct.value.image_url ? [activeProduct.value.image_url] : [])) : [])
 function openProduct(product) { chosenVariant.value=-1;activeProduct.value = product; currentImage.value = productImages.value[0] || ''; routePath.value = '/product/' + product.id; history.pushState({ productId: product.id }, '', '/product/' + product.id); window.scrollTo({top:0,behavior:'smooth'}) }
-function closeProduct() { activeProduct.value = null; routePath.value = '/'; history.pushState({}, '', '/'); window.scrollTo({top:0,behavior:'smooth'}) }
+async function closeProduct() {
+  activeProduct.value = null
+  routePath.value = '/catalog'
+  history.pushState({}, '', '/catalog#catalog')
+  await nextTick()
+  scrollToCatalog()
+}
 function syncUrl() { chosenVariant.value=-1;const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
 const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
 const art = {
