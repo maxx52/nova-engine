@@ -27,6 +27,8 @@ export async function initDatabase() {
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS attributes JSONB NOT NULL DEFAULT '[]'::jsonb`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB NOT NULL DEFAULT '[]'::jsonb`)
   await pool.query(`UPDATE products SET images=jsonb_build_array(image_url) WHERE jsonb_array_length(images)=0 AND image_url<>''`)
   await pool.query(`CREATE TABLE IF NOT EXISTS categories (
     id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE,
