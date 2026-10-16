@@ -1,7 +1,8 @@
 import Fastify from 'fastify'
 import { config } from 'dotenv'
+import { fileURLToPath } from 'node:url'
 import { pool, initDatabase, productJson } from './db.js'
-config({ path: new URL('../../../.env', import.meta.url).pathname })
+config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) })
 const app = Fastify({ logger: true })
 const adminKey = process.env.ADMIN_API_KEY
 if (!adminKey || adminKey.length < 16) {
