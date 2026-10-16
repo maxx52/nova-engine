@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { config } from 'dotenv'
-config({ path: new URL('../../../.env', import.meta.url).pathname })
+import { fileURLToPath } from 'node:url'
+config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) })
 const { Pool } = pg
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://nova:nova_dev_password@localhost:5432/nova' })
 const seeds = [
