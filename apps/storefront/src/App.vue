@@ -11,11 +11,13 @@ const cartOpen = ref(false)
 const mobileMenu = ref(false)
 const notice = ref('')
 const activeProduct = ref(null)
+const chosenVariant = ref(-1)
+const selectedVariant = computed(()=>activeProduct.value?.variants?.[chosenVariant.value] || null)
 const currentImage = ref('')
 const productImages = computed(() => activeProduct.value ? (activeProduct.value.images?.length ? activeProduct.value.images : (activeProduct.value.image_url ? [activeProduct.value.image_url] : [])) : [])
-function openProduct(product) { activeProduct.value = product; currentImage.value = productImages.value[0] || ''; history.pushState({ productId: product.id }, '', '/product/' + product.id); window.scrollTo({top:0,behavior:'smooth'}) }
+function openProduct(product) { chosenVariant.value=-1;activeProduct.value = product; currentImage.value = productImages.value[0] || ''; history.pushState({ productId: product.id }, '', '/product/' + product.id); window.scrollTo({top:0,behavior:'smooth'}) }
 function closeProduct() { activeProduct.value = null; history.pushState({}, '', '/'); window.scrollTo({top:0,behavior:'smooth'}) }
-function syncUrl() { const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
+function syncUrl() { chosenVariant.value=-1;const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
 const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
 const art = {
   'Электроника': { icon: '🎧', background: 'linear-gradient(145deg,#e8e8ff,#d4dbfb)' },
@@ -30,10 +32,15 @@ const visibleProducts = computed(() => products.value.filter(p =>
 ))
 const itemCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0))
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0))
-function addToCart(product) {
-  const existing = cart.value.find(item => item.id === product.id)
-  if (existing) existing.quantity += 1
-  else cart.value.push({ ...product, quantity: 1 })
+function addToCart(product,variant=null) {
+  const choice=variant || (product.variants?.length ? product.variants.find(v=>v.stock>0) : null)
+  if(product.variants?.length && !choice){notice.value='Нет доступных вариантов';return}
+  if(choice && choice.stock<=0){notice.value='Вариант отсутствует';return}
+  const key=product.id+':'+(choice?.name||'base')
+  const existing=cart.value.find(item=>item.cartKey===key)
+  if(existing)existing.quantity+=1
+  else cart.value.push({...product,cartKey:key,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:1})
+
   notice.value = 'Товар добавлен в корзину'
   window.setTimeout(() => notice.value = '', 2400)
 }
@@ -56,7 +63,7 @@ onMounted(async () => {
 
 <template>
   <div class="site-shell">
-    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.5</span></div>
+    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.6</span></div>
     <header class="site-header">
       <div class="container header-inner">
         <a href="#" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>
@@ -124,12 +131,12 @@ onMounted(async () => {
         <div class="detail-info">
           <span class="section-kicker">{{activeProduct.category}}</span>
           <h1>{{activeProduct.name}}</h1>
-          <p class="detail-sku">Артикул: {{activeProduct.sku || 'не указан'}}</p>
-          <strong class="detail-price">{{currency(activeProduct.price)}}</strong>
-          <p class="detail-stock">{{activeProduct.stock>0?'● В наличии: '+activeProduct.stock:'Наличие уточняется'}}</p>
-          <button class="primary-button" @click="addToCart(activeProduct)">Добавить в корзину →</button>
+          <p class="detail-sku">Артикул: {{selectedVariant?.sku || activeProduct.sku || 'не указан'}}</p>
+          <strong class="detail-price">{{currency(selectedVariant?.price ?? activeProduct.price)}}</strong>
+          <p class="detail-stock">{{(selectedVariant?.stock ?? activeProduct.stock)>0?'● В наличии: '+(selectedVariant?.stock ?? activeProduct.stock):'Нет в наличии'}}</p>
+          <div v-if="activeProduct.variants?.length" class="variant-picker"><strong>Выберите вариант</strong><div><button v-for="(v,i) in activeProduct.variants" :key="i" :disabled="v.stock===0" :class="{chosen:chosenVariant===i}" @click="chosenVariant=i">{{v.name}} · {{currency(v.price)}}</button></div></div><button class="primary-button" :disabled="(activeProduct.variants?.length && chosenVariant<0) || (selectedVariant?.stock===0)" @click="addToCart(activeProduct,selectedVariant)">Добавить в корзину →</button>
           <h2>Описание товара</h2>
-          <p class="detail-description">{{activeProduct.description || 'Описание пока не добавлено.'}}</p>
+          <p class="detail-description">{{activeProduct.description || 'Описание пока не добавлено.'}}</p><div v-if="activeProduct.attributes?.length" class="detail-attributes"><h2>Характеристики</h2><div v-for="(attr,i) in activeProduct.attributes" :key="i"><span>{{attr.name}}</span><strong>{{attr.value}}</strong></div></div>
         </div>
       </div>
     </main>
