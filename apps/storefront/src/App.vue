@@ -40,7 +40,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/products')
     if (!response.ok) throw new Error('Не удалось получить товары')
-    products.value = await response.json()
+    products.value = (await response.json()).filter(p=>p.published!==false)
   } catch (e) { error.value = e.message }
   finally { loading.value = false }
 })
@@ -97,10 +97,10 @@ onMounted(async () => {
         <div v-else-if="visibleProducts.length" class="product-grid">
           <article v-for="(product, index) in visibleProducts" :key="product.id" class="product-card">
             <div class="product-image" :style="{ background: art[product.category]?.background || 'linear-gradient(145deg,#e6eaf1,#cfd9e6)' }">
-              <span class="product-badge" v-if="index < 2">{{ index === 0 ? 'ХИТ ПРОДАЖ' : 'ВЫБОР NOVA' }}</span><span class="product-emoji">{{ productIcons[(product.id - 1) % productIcons.length] || '📦' }}</span>
+              <span class="product-badge" v-if="index < 2">{{ index === 0 ? 'ХИТ ПРОДАЖ' : 'ВЫБОР NOVA' }}</span><img v-if="product.image_url" :src="product.image_url" :alt="product.name" style="width:100%;height:100%;object-fit:contain;padding:24px"><span v-else class="product-emoji">{{ productIcons[(product.id - 1) % productIcons.length] || '📦' }}</span>
               <button class="quick-add" :aria-label="'Добавить ' + product.name + ' в корзину'" @click="addToCart(product)">＋</button>
             </div>
-            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3>{{ product.name }}</h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)">В корзину ↗</button></div></div>
+            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3>{{ product.name }}</h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.stock===0 && product.sku">В корзину ↗</button></div></div>
           </article>
         </div>
         <p v-else-if="!error" class="empty-state">По вашему запросу товары не найдены.</p>
