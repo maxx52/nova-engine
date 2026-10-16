@@ -26,3 +26,5 @@
 .variant-picker button{border:1px solid #dfe9e2;border-radius:7px;background:#fff;padding:11px;font-size:12px}
 .variant-picker button.chosen{border-color:#33805a;background:#e9f4ed}.variant-picker button:disabled{opacity:.4;cursor:not-allowed}
 .detail-attributes{margin-top:34px}.detail-attributes>div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #e9eeea;padding:12px 0;font-size:13px}.detail-attributes span{color:#77877c}
+
+.catalog-filter{border:1px solid #e3e9e4;border-radius:7px;background:white;padding:10px 12px;font:inherit;font-size:12px;max-width:230px;min-height:43px}@media(max-width:620px){.catalog-filter{max-width:none;width:100%}}
