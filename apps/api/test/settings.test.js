@@ -22,7 +22,7 @@ test('settings auth, published homepage validation, storage, and catalog guard',
  app.get('/api/products/:id',()=>({id:1}))
  app.get('/api/categories',()=>[])
  // Match the application ordering: hook is registered after the existing page routes.
- registerShopGuard(app,pool,'secret')
+ registerShopGuard(app,pool,async req=>req.headers['x-admin-key']==='secret')
  try{
   assert.equal((await app.inject('/api/settings')).json().shop_enabled,true)
   assert.equal((await app.inject({method:'PUT',url:'/api/admin/settings',payload:defaultSettings})).statusCode,401)

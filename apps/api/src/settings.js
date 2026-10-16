@@ -34,9 +34,9 @@ export function registerSettings(app,pool,requireAdmin) {
   })
 }
 
-export function registerShopGuard(app,pool,adminKey) {
+export function registerShopGuard(app,pool,isAdmin) {
   app.addHook('preHandler',async(request,reply)=>{
-    if(request.method==='GET' && /^\/api\/(products|categories)(\/|$)/.test(request.url.split('?')[0]) && request.headers['x-admin-key']!==adminKey){
+    if(request.method==='GET' && /^\/api\/(products|categories)(\/|$)/.test(request.url.split('?')[0]) && !await isAdmin(request)){
       const settings=await readSettings(pool)
       if(!settings.shop_enabled)return reply.code(404).send({error:'Магазин отключён'})
     }

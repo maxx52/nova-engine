@@ -1,4 +1,5 @@
 <script setup>
+import { adminFetch } from './adminApi.js'
 import {ref,onMounted,computed} from 'vue'
 const props=defineProps({apiWrite:Function})
 const rows=ref([]),form=ref(null),tagsText=ref(''),error=ref(''),busy=ref(false),loading=ref(true),search=ref('')
@@ -9,7 +10,7 @@ async function load(){rows.value=await props.apiWrite('/api/admin/posts','GET')}
 function edit(row){error.value='';form.value=row?JSON.parse(JSON.stringify(row)):{title:'',slug:'',excerpt:'',content:'',category:'',tags:[],cover_url:'',published:false};tagsText.value=form.value.tags.join(', ')}
 async function save(){if(busy.value)return;busy.value=true;error.value='';try{form.value=await props.apiWrite('/api/admin/posts'+(form.value.id?'/'+form.value.id:''),form.value.id?'PUT':'POST',{...form.value,tags:tagsText.value.split(',').map(t=>t.trim()).filter(Boolean)});await load();form.value=null}catch(e){error.value=e.message}finally{busy.value=false}}
 async function remove(row){if(!confirm('Удалить статью «'+row.title+'»?'))return;busy.value=true;error.value='';try{await props.apiWrite('/api/admin/posts/'+row.id,'DELETE');await load()}catch(e){error.value=e.message}finally{busy.value=false}}
-async function upload(event){const file=event.target.files?.[0];if(!file)return;busy.value=true;error.value='';try{const body=new FormData();body.append('file',file);const response=await fetch('/api/uploads',{method:'POST',headers:{'x-admin-key':sessionStorage.getItem('nova_admin_key')||''},body});const data=await response.json();if(!response.ok)throw Error(data.error||'Ошибка загрузки');form.value.cover_url=data.url}catch(e){error.value=e.message}finally{busy.value=false;event.target.value=''}}
+async function upload(event){const file=event.target.files?.[0];if(!file)return;busy.value=true;error.value='';try{const body=new FormData();body.append('file',file);const response=await adminFetch('/api/uploads',{method:'POST',body});const data=await response.json();if(!response.ok)throw Error(data.error||'Ошибка загрузки');form.value.cover_url=data.url}catch(e){error.value=e.message}finally{busy.value=false;event.target.value=''}}
 onMounted(async()=>{try{await load()}catch(e){error.value=e.message}finally{loading.value=false}})
 </script>
 <template>

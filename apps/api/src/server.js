@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import { registerAuth } from './auth.js'
 import { registerBlog } from './blog.js'
 import { registerSettings, registerShopGuard } from './settings.js'
 import { registerPages } from './pages.js'
@@ -21,17 +22,11 @@ if (!adminKey || adminKey.length < 16) {
   console.error('Set ADMIN_API_KEY (at least 16 characters) in .env before starting API')
   process.exit(1)
 }
-function requireAdmin(request, reply, done) {
-  if (request.headers['x-admin-key'] !== adminKey) {
-    reply.code(401).send({ error: 'Неверный ключ администратора' })
-    return
-  }
-  done()
-}
+const {requireAdmin,isAdmin}=registerAuth(app,pool,{setupKey:adminKey,secure:process.env.SESSION_SECURE==='true'||process.env.NODE_ENV==='production',origins:(process.env.ADMIN_ORIGINS||'http://localhost:5174,http://127.0.0.1:5174').split(',').map(s=>s.trim())})
 registerPages(app, pool, requireAdmin)
 registerSettings(app, pool, requireAdmin)
 registerBlog(app, pool, requireAdmin)
-registerShopGuard(app,pool,adminKey)
+registerShopGuard(app,pool,isAdmin)
 
 function validateProduct(body) {
   if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 150) return 'Название: от 1 до 150 символов'
@@ -53,10 +48,10 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.11.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.12.0', database: 'connected' }
 })
-app.get('/api/products', async () => {
-  const result = await pool.query('SELECT '+productFields+' FROM products ORDER BY id')
+app.get('/api/products', async (request) => {
+  const result = await pool.query('SELECT '+productFields+' FROM products'+(await isAdmin(request)?'':' WHERE published=TRUE')+' ORDER BY id')
   return result.rows.map(productJson)
 })
 app.get('/api/products/:id',async(request,reply)=>{const id=Number(request.params.id);if(!Number.isSafeInteger(id)||id<=0)return reply.code(400).send({error:'Неверный ID'});const result=await pool.query('SELECT '+productFields+' FROM products WHERE id=$1 AND published=TRUE',[id]);if(!result.rowCount)return reply.code(404).send({error:'Товар не найден'});return productJson(result.rows[0])})

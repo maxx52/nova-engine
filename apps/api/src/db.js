@@ -13,6 +13,14 @@ const seeds = [
   ['Органайзер для стола','Дом',990,'Порядок на рабочем месте.']
 ]
 export async function initDatabase() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS admin_accounts (
+    id INTEGER PRIMARY KEY CHECK (id=1), username VARCHAR(64) NOT NULL UNIQUE, password_hash TEXT NOT NULL
+  )`)
+  await pool.query(`CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash VARCHAR(64) PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES admin_accounts(id) ON DELETE CASCADE,
+    csrf_token VARCHAR(64) NOT NULL, expires_at TIMESTAMPTZ NOT NULL
+  )`)
+  await pool.query('CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at)')
   await pool.query(`CREATE TABLE IF NOT EXISTS pages (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(150) NOT NULL,

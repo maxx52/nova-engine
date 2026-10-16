@@ -1,4 +1,5 @@
 <script setup>
+import { adminFetch } from './adminApi.js'
 import { ref } from 'vue'
 const emit = defineEmits(['uploading'])
 const sections = defineModel({ default: () => [] })
@@ -21,8 +22,7 @@ async function upload(event, section) {
   uploading.value = true; emit('uploading', true); error.value = ''
   try {
     const data = new FormData(); data.append('file', file)
-    const key = sessionStorage.getItem('nova_admin_key') || ''
-    const response = await fetch('/api/uploads', { method: 'POST', headers: { 'x-admin-key': key }, body: data })
+    const response = await adminFetch('/api/uploads', { method: 'POST',  body: data })
     const result = await response.json()
     if (!response.ok) throw Error(result.error || 'Ошибка загрузки')
     section.image_url = result.url

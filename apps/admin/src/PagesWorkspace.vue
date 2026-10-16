@@ -1,4 +1,5 @@
 <script setup>
+import { adminFetch } from './adminApi.js'
 import { ref, onMounted } from 'vue'
 import PageSectionsEditor from './PageSectionsEditor.vue'
 const siteUrl = (import.meta.env.VITE_SITE_URL || 'http://localhost:5173').replace(/\/$/, '')

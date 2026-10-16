@@ -1,8 +1,10 @@
 <script setup>
+import { adminFetch } from './adminApi.js'
 import { ref, computed, onMounted } from 'vue'
 import PagesWorkspace from './PagesWorkspace.vue'
 import SiteSettings from './SiteSettings.vue'
 import BlogWorkspace from './BlogWorkspace.vue'
+import AccountActions from './AccountActions.vue'
 const siteSettings=ref({shop_enabled:true})
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
 const page=ref('overview')
@@ -23,12 +25,10 @@ const templateText=ref('')
 const categoryTree=computed(()=>{const depth=(c,seen=new Set())=>{if(!c.parent_id||seen.has(c.id))return 0;const parent=categoryRows.value.find(x=>x.id===c.parent_id);return parent?1+depth(parent,new Set([...seen,c.id])):0};return [...categoryRows.value].map(c=>({...c,depth:depth(c)})).sort((a,b)=>a.name.localeCompare(b.name,'ru'))})
 const categoryError=ref('')
 const sidebar=ref(false)
-const adminKey=ref(sessionStorage.getItem('nova_admin_key') || '')
 const busy=ref(false)
 const saveError=ref('')
-function updateKey(){const key=window.prompt('Введи ADMIN_API_KEY из файла .env:',adminKey.value);if(key!==null){adminKey.value=key.trim();sessionStorage.setItem('nova_admin_key',adminKey.value)}}
-async function apiWrite(url,method,body){const response=await fetch(url,{method,headers:{'x-admin-key':adminKey.value,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
-async function reload(){const r=await fetch('/api/products',{headers:{'x-admin-key':adminKey.value}});if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
+async function apiWrite(url,method,body){const response=await adminFetch(url,{method,headers:body?{'content-type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
+async function reload(){const r=await adminFetch('/api/products');if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
 const allSections=[{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories()]);error.value=''}catch(e){error.value=e.message}}}
@@ -36,12 +36,11 @@ const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabl
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(n)
 const total=computed(()=>products.value.reduce((a,p)=>a+p.price,0))
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
-async function loadCategories(){const r=await fetch('/api/categories',{headers:{'x-admin-key':adminKey.value}});if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
+async function loadCategories(){const r=await adminFetch('/api/categories');if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
 function navigate(id){page.value=id;sidebar.value=false}
 function edit(product=null){editingId.value=product?.id??null;form.value=product?{name:product.name,category:product.category,price:product.price,description:product.description,sku:product.sku||'',stock:product.stock||0,image_url:product.image_url||'',published:product.published!==false,images:[...(product.images?.length?product.images:(product.image_url?[product.image_url]:[]))],attributes:(product.attributes||[]).map(a=>({...a})),variants:(product.variants||[]).map(v=>({...v}))}:{name:'',category:categories.value[0]||'Другое',price:0,description:'',sku:'',stock:0,image_url:'',published:true,images:[],attributes:[],variants:[]};editorTab.value='main';dialog.value=true}
 async function save(){
   if(busy.value||!form.value.name.trim()||!Number.isFinite(Number(form.value.price))||Number(form.value.price)<0)return
-  if(!adminKey.value){updateKey();if(!adminKey.value)return}
   busy.value=true;saveError.value=''
   try{
     const data={...form.value,name:form.value.name.trim(),price:Number(form.value.price),stock:Number(form.value.stock),attributes:form.value.attributes.filter(a=>a.name.trim()&&a.value.trim()),variants:form.value.variants.map(v=>({...v,price:Number(v.price),stock:Number(v.stock)}))}
@@ -51,15 +50,13 @@ async function save(){
 }
 async function remove(id){
   if(!window.confirm('Удалить товар из базы данных?'))return
-  if(!adminKey.value){updateKey();if(!adminKey.value)return}
   try{await apiWrite('/api/products/'+id,'DELETE');await reload()}catch(e){window.alert(e.message)}
 }
 async function uploadImage(event){
  const file=event.target.files?.[0];if(!file)return
  if(form.value.images.length>=12){saveError.value='Максимум 12 фотографий';return}
- if(!adminKey.value){updateKey();if(!adminKey.value)return}
  uploading.value=true;saveError.value=''
- try{const body=new FormData();body.append('file',file);const response=await fetch('/api/uploads',{method:'POST',headers:{'x-admin-key':adminKey.value},body});const data=await response.json();if(!response.ok)throw Error(data.error||'Ошибка загрузки');form.value.images=[...form.value.images,data.url].slice(0,12);if(!form.value.image_url)form.value.image_url=data.url}catch(e){saveError.value=e.message}finally{uploading.value=false;event.target.value=''}
+ try{const body=new FormData();body.append('file',file);const response=await adminFetch('/api/uploads',{method:'POST',body});const data=await response.json();if(!response.ok)throw Error(data.error||'Ошибка загрузки');form.value.images=[...form.value.images,data.url].slice(0,12);if(!form.value.image_url)form.value.image_url=data.url}catch(e){saveError.value=e.message}finally{uploading.value=false;event.target.value=''}
 }
 function addAttribute(){form.value.attributes.push({name:'',value:''})}
 function addVariant(){form.value.variants.push({name:'',sku:'',price:Number(form.value.price)||0,stock:0})}
@@ -70,7 +67,6 @@ function cancelCategory(){categoryEditing.value=null;categoryName.value='';paren
 function useTemplate(){const c=categoryRows.value.find(x=>x.name===form.value.category);if(!c)return;for(const name of c.attribute_templates||[]){if(!form.value.attributes.some(a=>a.name.toLowerCase()===name.toLowerCase()))form.value.attributes.push({name,value:''})}editorTab.value='attributes'}
 async function addCategory(){
  if(!categoryName.value.trim())return
- if(!adminKey.value){updateKey();if(!adminKey.value)return}
  categoryError.value=''
  try{const values=templateText.value.split(',').map(x=>x.trim()).filter(Boolean);await apiWrite(categoryEditing.value?'/api/categories/'+categoryEditing.value:'/api/categories',categoryEditing.value?'PUT':'POST',{name:categoryName.value.trim(),parent_id:parentCategory.value?Number(parentCategory.value):null,attribute_templates:values});cancelCategory();await loadCategories()}catch(e){categoryError.value=e.message}
 }
@@ -83,14 +79,14 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.11 <small>Демо-режим</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.12 <small>Демо-режим</small></div>
   </aside>
   <div class="main-area">
-    <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><button class="row-btn" @click="updateKey">🔑 Ключ API</button><div class="avatar">A</div></div></header>
+    <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><AccountActions /><div class="avatar">A</div></div></header>
     <main class="content">
-      <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" :key="adminKey" />
-      <SiteSettings v-if="page==='settings'" :api-write="apiWrite" :key="adminKey" @saved="settingsSaved" />
-      <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" :key="adminKey" />
+      <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" />
+      <SiteSettings v-if="page==='settings'" :api-write="apiWrite" @saved="settingsSaved" />
+      <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" />
       <div v-if="page==='overview'">
         <div class="page-title"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Добро пожаловать в NOVA 👋</h1><p>Управляйте содержимым сайта и каталогом в одном месте.</p></div><button v-if="shopEnabled" class="primary-btn" @click="navigate('products');edit()">＋ Добавить товар</button></div>
         <div v-if="shopEnabled" class="stats-grid"><div class="stat-card"><span>Всего товаров</span><strong>{{products.length}}</strong><small>Товары из базы данных</small><div class="stat-icon">▦</div></div><div class="stat-card"><span>Сумма цен каталога</span><strong>{{money(total)}}</strong><small>Не выручка магазина</small><div class="stat-icon">₽</div></div><div class="stat-card"><span>Заказы</span><strong>—</strong><small>Модуль пока не подключён</small><div class="stat-icon">▤</div></div><div class="stat-card"><span>Покупатели</span><strong>—</strong><small>Модуль пока не подключён</small><div class="stat-icon">♙</div></div></div>

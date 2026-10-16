@@ -1,11 +1,12 @@
 <script setup>
+import { adminFetch } from './adminApi.js'
 import { ref,onMounted } from 'vue'
 const props=defineProps({apiWrite:Function})
 const emit=defineEmits(['saved'])
 const form=ref(null),pages=ref([]),busy=ref(false),error=ref(''),notice=ref('')
 onMounted(async()=>{try{form.value=await props.apiWrite('/api/settings','GET');const all=await props.apiWrite('/api/admin/pages','GET');pages.value=all.filter(p=>p.published)}catch(e){error.value=e.message}})
 async function save(){if(busy.value)return;busy.value=true;error.value='';notice.value='';try{form.value=await props.apiWrite('/api/admin/settings','PUT',form.value);emit('saved',form.value);notice.value='Настройки сохранены'}catch(e){error.value=e.message}finally{busy.value=false}}
-async function upload(event){const file=event.target.files?.[0];if(!file)return;busy.value=true;error.value='';notice.value='';try{const data=new FormData();data.append('file',file);const response=await fetch('/api/uploads',{method:'POST',headers:{'x-admin-key':sessionStorage.getItem('nova_admin_key')||''},body:data});const result=await response.json();if(!response.ok)throw Error(result.error||'Ошибка загрузки');form.value.logo_url=result.url}catch(e){error.value=e.message}finally{busy.value=false;event.target.value=''}}
+async function upload(event){const file=event.target.files?.[0];if(!file)return;busy.value=true;error.value='';notice.value='';try{const data=new FormData();data.append('file',file);const response=await adminFetch('/api/uploads',{method:'POST',body:data});const result=await response.json();if(!response.ok)throw Error(result.error||'Ошибка загрузки');form.value.logo_url=result.url}catch(e){error.value=e.message}finally{busy.value=false;event.target.value=''}}
 function move(index,delta){const target=index+delta;if(target<0||target>=form.value.menu.length)return;const [item]=form.value.menu.splice(index,1);form.value.menu.splice(target,0,item)}
 </script>
 <template>
