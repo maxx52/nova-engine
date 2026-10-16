@@ -2,13 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import ContentPage from './ContentPage.vue'
 import BlogView from './BlogView.vue'
+import {safeLink} from '../../../shared/contentSafety.js'
 
 const siteSettings=ref({name:'NOVA',logo_url:'',home_slug:null,shop_enabled:true,blog_enabled:false,menu:[]})
 const settingsReady=ref(false)
 const settingsError=ref('')
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
 const isShopLink=url=>/^\/(catalog|product)(\/|$|[?#])/.test(url) || url==='/#catalog' || url==='/#advantages'
-const menuItems=computed(()=>siteSettings.value.menu.filter(item=>(shopEnabled.value||!isShopLink(item.url)) && (siteSettings.value.blog_enabled || !/^\/blog(\/|$|[?#])/.test(item.url))))
+const menuItems=computed(()=>siteSettings.value.menu.filter(item=>item.url && safeLink(item.url) && (shopEnabled.value||!isShopLink(item.url)) && (siteSettings.value.blog_enabled || !/^\/blog(\/|$|[?#])/.test(item.url))))
 const routePath = ref(location.pathname)
 window.addEventListener('popstate', () => { routePath.value = location.pathname })
 const contentPath=computed(()=>routePath.value==='/' && siteSettings.value.home_slug ? '/'+siteSettings.value.home_slug : routePath.value)
@@ -89,7 +90,7 @@ onMounted(async () => {
 <template>
   <div v-if="!settingsReady" class="empty-state" role="status">{{settingsError || 'Загрузка сайта…'}}</div>
   <div v-else class="site-shell">
-    <div class="announcement"><span>{{siteSettings.name}}</span><span class="announcement-right">NOVA Engine · Preview 0.13</span></div>
+    <div class="announcement"><span>{{siteSettings.name}}</span><span class="announcement-right">NOVA Engine · Preview 0.14</span></div>
     <header class="site-header">
       <div class="container header-inner">
         <a href="/" class="logo" :aria-label="siteSettings.name+' — главная'"><img v-if="siteSettings.logo_url" :src="siteSettings.logo_url" :alt="siteSettings.name" class="site-logo-image"><span v-else class="logo-symbol">{{siteSettings.name.slice(0,1)}}</span><span class="site-name">{{siteSettings.name}}</span></a>

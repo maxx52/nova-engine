@@ -1,8 +1,7 @@
 <script setup>
 defineProps({ sections: { type: Array, default: () => [] } })
-// Also check links on rendering, so legacy or imported data cannot create script links.
-const link = value => typeof value === 'string' && (/^\/(?![\/\\])[^\\\s]*$/.test(value) || /^https?:\/\/[^\s\\]+$/.test(value)) ? value : ''
-const image = value => typeof value === 'string' && /^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(value) ? value : ''
+import {safeLink,mediaUrl as image} from '../../../shared/contentSafety.js'
+const link=value=>safeLink(value)?value:''
 </script>
 <template>
   <div class="page-sections">

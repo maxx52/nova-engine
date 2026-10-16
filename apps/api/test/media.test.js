@@ -10,7 +10,7 @@ const filename='00000000-0000-0000-0000-000000000001.png',url='/uploads/'+filena
 test('media scanner indexes existing regular image files and skips other files and symlinks',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'nova-media-'));const inserted=[]
  try{
-  await writeFile(join(dir,filename),'test');await writeFile(join(dir,'ignore.txt'),'ignore');await symlink(join(dir,filename),join(dir,'00000000-0000-0000-0000-000000000002.png'))
+  await writeFile(join(dir,filename),'test');await writeFile(join(dir,'ignore.txt'),'ignore');try{await symlink(join(dir,filename),join(dir,'00000000-0000-0000-0000-000000000002.png'))}catch(e){if(!['EPERM','EACCES'].includes(e.code))throw e}
   await syncMedia({query:async(sql,args)=>{if(sql.startsWith('INSERT'))inserted.push(args);return {rows:[]}}},dir)
   assert.equal(inserted.length,1);assert.equal(inserted[0][0],url);assert.equal(inserted[0][2],4)
  }finally{await rm(dir,{recursive:true,force:true})}

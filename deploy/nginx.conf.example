@@ -1,0 +1,64 @@
+# Template for /etc/nginx/conf.d/nova.conf (inside the http {} context).
+# Replace domains, certificate paths and roots. Install the two included snippets
+# at /srv/nova/deploy/. Certificates must already exist. Run nginx -t before reload.
+# Run Node with NODE_ENV=production, API_HOST=127.0.0.1, TRUST_PROXY=loopback,
+# SESSION_SECURE=true and ADMIN_ORIGINS=https://admin.example.com.
+limit_req_zone $binary_remote_addr zone=nova_requests:10m rate=8r/s;
+limit_conn_zone $binary_remote_addr zone=nova_connections:10m;
+server_tokens off;
+server { listen 80 default_server; server_name _; return 444; }
+server { listen 80; server_name example.com admin.example.com; return 301 https://$host$request_uri; }
+
+server {
+    listen 443 ssl;
+    server_name example.com;
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root /srv/nova/apps/storefront/dist;
+    include /srv/nova/deploy/security-headers.conf;
+    client_max_body_size 6m;
+    client_body_timeout 15s;
+    client_header_timeout 10s;
+    limit_conn nova_connections 20;
+    location ~ /\. { return 404; }
+    # Administrator/session/upload operations are not exposed on the public host.
+    location ^~ /api/auth/ { return 404; }
+    location ^~ /api/admin/ { return 404; }
+    location = /api/uploads { return 404; }
+    location /api/ {
+        limit_except GET HEAD { deny all; }
+        limit_req zone=nova_requests burst=30 nodelay;
+        limit_req_status 429;
+        include /srv/nova/deploy/api-proxy.conf;
+        proxy_set_header Cookie "";
+    }
+    # Uploads must go through Node, never serve this directory as executable content.
+    location /uploads/ {
+        limit_except GET HEAD { deny all; }
+        limit_req zone=nova_requests burst=30 nodelay;
+        include /srv/nova/deploy/api-proxy.conf;
+    }
+    location / { try_files $uri $uri/ /index.html; }
+}
+server {
+    listen 443 ssl;
+    server_name admin.example.com;
+    ssl_certificate /etc/letsencrypt/live/admin.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/admin.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root /srv/nova/apps/admin/dist;
+    include /srv/nova/deploy/security-headers.conf;
+    client_max_body_size 6m;
+    client_body_timeout 15s;
+    client_header_timeout 10s;
+    limit_conn nova_connections 20;
+    location ~ /\. { return 404; }
+    location /api/ {
+        limit_req zone=nova_requests burst=30 nodelay;
+        limit_req_status 429;
+        include /srv/nova/deploy/api-proxy.conf;
+    }
+    location /uploads/ { include /srv/nova/deploy/api-proxy.conf; }
+    location / { try_files $uri $uri/ /index.html; }
+}

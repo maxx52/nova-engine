@@ -4,7 +4,7 @@ import { config } from 'dotenv'
 import { fileURLToPath } from 'node:url'
 config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) })
 const { Pool } = pg
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://nova:nova_dev_password@localhost:5432/nova' })
+export const pool = new Pool({max:10,connectionTimeoutMillis:5000,idleTimeoutMillis:30000,options:'-c statement_timeout=5000 -c lock_timeout=3000 -c idle_in_transaction_session_timeout=15000', connectionString: process.env.DATABASE_URL || 'postgres://nova:nova_dev_password@localhost:5432/nova' })
 const seeds = [
   ['Беспроводные наушники','Электроника',3490,'Компактная модель для музыки и звонков.'],
   ['Настольная лампа','Дом',2190,'Регулируемый свет для рабочего стола.'],
@@ -21,6 +21,9 @@ export async function initDatabase() {
     token_hash VARCHAR(64) PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES admin_accounts(id) ON DELETE CASCADE,
     csrf_token VARCHAR(64) NOT NULL, expires_at TIMESTAMPTZ NOT NULL
   )`)
+  await pool.query(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`)
+  await pool.query(`CREATE TABLE IF NOT EXISTS auth_throttle (key VARCHAR(64) PRIMARY KEY,attempts INTEGER NOT NULL,reset_at TIMESTAMPTZ NOT NULL)`)
+  await pool.query('CREATE INDEX IF NOT EXISTS auth_throttle_expiry_idx ON auth_throttle(reset_at)')
   await pool.query('CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at)')
   await pool.query(`CREATE TABLE IF NOT EXISTS pages (
     id BIGSERIAL PRIMARY KEY,

@@ -1,7 +1,6 @@
 const imagePattern = /^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/
-export function safeLink(value) {
-  return typeof value === 'string' && (value === '' || /^\/(?![\/\\])[^\\\s]*$/.test(value) || /^https?:\/\/[^\s\\]+$/.test(value))
-}
+export {safeLink} from '../../../shared/contentSafety.js'
+import {safeLink} from '../../../shared/contentSafety.js'
 export function validateSections(sections) {
   if (!Array.isArray(sections) || sections.length > 50) return 'Максимум 50 секций'
   const ids = new Set()

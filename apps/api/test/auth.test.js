@@ -4,17 +4,20 @@ import Fastify from 'fastify'
 import {registerAuth,hashPassword,verifyPassword} from '../src/auth.js'
 const password='test-password-2026',key='test-setup-key-at-least-16'
 async function fixture(secure=false){
- let account=null,time=Date.now();const sessions=new Map(),queries=[]
+ let account=null,time=Date.now();const sessions=new Map(),throttles=new Map(),queries=[]
  const db={async query(sql,args=[]){
   queries.push(sql)
+  if(sql.startsWith('DELETE FROM auth_throttle')){if(sql.includes('key=$1'))throttles.delete(args[0]);else for(const [key,b]of throttles)if(+b.reset<=+args[0])throttles.delete(key);return {rowCount:1}}
+  if(sql.startsWith('INSERT INTO auth_throttle')){let b=throttles.get(args[0]);if(!b||+b.reset<=+args[2])b={count:0,reset:args[1]};if(b.count>=10)return {rowCount:0,rows:[]};b.count++;throttles.set(args[0],b);return {rowCount:1,rows:[{attempts:b.count}]}}
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {}
   if(sql==='SELECT id FROM admin_accounts LIMIT 1')return {rowCount:account?1:0,rows:account?[{id:1}]:[]}
   if(sql.startsWith('INSERT INTO admin_accounts')){if(account)return {rowCount:0,rows:[]};account={id:1,username:args[0],password_hash:args[1]};return {rowCount:1,rows:[{id:1,username:account.username}]}}
   if(sql.startsWith('SELECT id FROM admin_accounts WHERE id='))return {rowCount:account&&String(account.id)===String(args[0])&&account.password_hash===args[1]?1:0}
   if(sql.startsWith('SELECT id,username,password_hash FROM admin_accounts'))return {rows:account&&(sql.includes('username=')?account.username===args[0]:String(account.id)===String(args[0]))?[{...account}]:[]}
   if(sql.startsWith('UPDATE admin_accounts')){if(!account||String(account.id)!==String(args[1])||account.password_hash!==args[2])return {rowCount:0};account.password_hash=args[0];return {rowCount:1}}
-  if(sql.startsWith('INSERT INTO admin_sessions')){sessions.set(args[0],{token_hash:args[0],user_id:String(args[1]),csrf_token:args[2],expires_at:args[3]});return {rowCount:1}}
-  if(sql.startsWith('SELECT s.token_hash')){const row=sessions.get(args[0]);return {rows:row&&+row.expires_at>time?[{...row,username:account.username}]:[]}}
+  if(sql.startsWith('INSERT INTO admin_sessions')){sessions.set(args[0],{token_hash:args[0],user_id:String(args[1]),csrf_token:args[2],expires_at:args[3],last_seen_at:new Date(time)});return {rowCount:1}}
+  if(sql.startsWith('SELECT s.token_hash')){const row=sessions.get(args[0]);return {rows:row&&+row.expires_at>time&&+row.last_seen_at>time-30*60000?[{...row,username:account.username}]:[]}}
+  if(sql.startsWith('UPDATE admin_sessions SET last_seen_at')){const row=sessions.get(args[0]);if(row)row.last_seen_at=new Date(time);return {rowCount:1}}
   if(sql.startsWith('DELETE FROM admin_sessions')){for(const [hash,row]of sessions){if(sql.includes('expires_at')?+row.expires_at<=time:sql.includes('user_id')?row.user_id===String(args[0]):hash===args[0])sessions.delete(hash)}return {rowCount:1}}
   throw Error('Unexpected query '+sql)
  },release(){}}
@@ -25,7 +28,7 @@ async function fixture(secure=false){
  app.get('/session-valid',async req=>({admin:await isAdmin(req)}))
  const mutation=(url,payload={},cookie='',csrf='')=>app.inject({method:'POST',url,payload,headers:{'x-nova-request':'1',...(cookie?{cookie}:{}),...(csrf?{'x-csrf-token':csrf}:{})}})
  const cookie=r=>r.headers['set-cookie'].split(';')[0]
- return {app,mutation,cookie,sessions,queries,account:()=>account,advance:n=>time+=n}
+ return {app,pool,mutation,cookie,sessions,queries,account:()=>account,advance:n=>time+=n}
 }
 test('passwords use unique salts and verify without storing plaintext',async()=>{
  const hash=await hashPassword(password),second=await hashPassword(password)
@@ -35,6 +38,7 @@ test('setup, login, session, CSRF, password change, revocation and logout',async
  const f=await fixture();const {app,mutation,cookie}=f
  try{
   assert.equal((await app.inject('/api/auth/status')).json().setup_required,true)
+  const early=await app.inject({method:'POST',url:'/private',headers:{'content-type':'application/json'},payload:'{broken-json'});assert.equal(early.statusCode,401)
   assert.equal((await mutation('/api/auth/setup',{username:'admin',password,setup_key:'wrong'})).statusCode,401)
   const created=await mutation('/api/auth/setup',{username:'Admin',password,setup_key:key})
   assert.equal(created.statusCode,201);assert.match(created.headers['set-cookie'],/HttpOnly; SameSite=Strict/)
@@ -69,7 +73,7 @@ test('auth refuses unmarked requests, limits attempts, expires sessions and sets
   const payload={username:'admin',password,setup_key:key}
   assert.equal((await f.app.inject({method:'POST',url:'/api/auth/setup',payload})).statusCode,403)
   const setup=await f.mutation('/api/auth/setup',payload);assert.equal(setup.statusCode,201)
-  assert.match(setup.headers['set-cookie'],/^__Secure-nova_session=/);assert.match(setup.headers['set-cookie'],/; Secure/)
+  assert.match(setup.headers['set-cookie'],/^__Host-nova_session=/);assert.match(setup.headers['set-cookie'],/; Secure/)
   f.advance(9*60*60*1000)
   assert.equal((await f.app.inject({url:'/private',headers:{cookie:f.cookie(setup)}})).statusCode,401)
   for(let i=0;i<10;i++)assert.equal((await f.mutation('/api/auth/login',{username:'admin',password:'short'})).statusCode,401)
@@ -77,4 +81,20 @@ test('auth refuses unmarked requests, limits attempts, expires sessions and sets
   f.advance(16*60*1000)
   assert.equal((await f.mutation('/api/auth/login',{username:'admin',password})).statusCode,200)
  }finally{await f.app.close()}
+})
+
+test('login throttling survives a new API instance, idle sessions expire and logout-all revokes every session',async()=>{
+ const f=await fixture();let second
+ try{
+  const setup=await f.mutation('/api/auth/setup',{username:'admin',password,setup_key:key});assert.equal(setup.statusCode,201)
+  const another=await f.mutation('/api/auth/login',{username:'admin',password});assert.equal(another.statusCode,200)
+  const all=await f.mutation('/api/auth/logout-all',{},f.cookie(another),another.json().csrf_token);assert.equal(all.statusCode,204)
+  assert.equal((await f.app.inject({url:'/private',headers:{cookie:f.cookie(setup)}})).statusCode,401)
+  const active=await f.mutation('/api/auth/login',{username:'admin',password});assert.equal(active.statusCode,200)
+  f.advance(31*60000);assert.equal((await f.app.inject({url:'/private',headers:{cookie:f.cookie(active)}})).statusCode,401)
+  for(let i=0;i<9;i++)await f.mutation('/api/auth/login',{username:'admin',password:'short'})
+  second=Fastify();registerAuth(second,f.pool,{setupKey:key,now:()=>Date.now()+31*60000})
+  const attempt=()=>second.inject({method:'POST',url:'/api/auth/login',headers:{'x-nova-request':'1'},payload:{username:'admin',password:'short'}})
+  assert.equal((await attempt()).statusCode,401);assert.equal((await attempt()).statusCode,429)
+ }finally{await f.app.close();if(second)await second.close()}
 })
