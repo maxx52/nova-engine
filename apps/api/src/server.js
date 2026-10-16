@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import { registerBlog } from './blog.js'
 import { registerSettings, registerShopGuard } from './settings.js'
 import { registerPages } from './pages.js'
 import multipart from '@fastify/multipart'
@@ -29,6 +30,7 @@ function requireAdmin(request, reply, done) {
 }
 registerPages(app, pool, requireAdmin)
 registerSettings(app, pool, requireAdmin)
+registerBlog(app, pool, requireAdmin)
 registerShopGuard(app,pool,adminKey)
 
 function validateProduct(body) {
@@ -51,7 +53,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.10.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.11.0', database: 'connected' }
 })
 app.get('/api/products', async () => {
   const result = await pool.query('SELECT '+productFields+' FROM products ORDER BY id')

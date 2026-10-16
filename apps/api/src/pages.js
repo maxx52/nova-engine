@@ -21,7 +21,7 @@ export function validateSections(sections) {
 export function validatePage(body) {
   if (!body || typeof body.title !== 'string' || !body.title.trim() || body.title.length > 150) return 'Заголовок: от 1 до 150 символов'
   if (typeof body.slug !== 'string' || body.slug.length > 120 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug)) return 'Адрес: латинские буквы, цифры и дефисы'
-  if (['api','uploads','product','admin','catalog'].includes(body.slug)) return 'Этот адрес зарезервирован'
+  if (['api','uploads','product','admin','catalog','blog'].includes(body.slug)) return 'Этот адрес зарезервирован'
   if (typeof body.content !== 'string' || body.content.length > 100000) return 'Текст: до 100 000 символов'
   if (typeof body.published !== 'boolean') return 'Укажите статус публикации'
   if (body.sections !== undefined) return validateSections(body.sections)

@@ -1,16 +1,18 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import ContentPage from './ContentPage.vue'
+import BlogView from './BlogView.vue'
 
-const siteSettings=ref({name:'NOVA',logo_url:'',home_slug:null,shop_enabled:true,menu:[]})
+const siteSettings=ref({name:'NOVA',logo_url:'',home_slug:null,shop_enabled:true,blog_enabled:false,menu:[]})
 const settingsReady=ref(false)
 const settingsError=ref('')
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
 const isShopLink=url=>/^\/(catalog|product)(\/|$|[?#])/.test(url) || url==='/#catalog' || url==='/#advantages'
-const menuItems=computed(()=>siteSettings.value.menu.filter(item=>shopEnabled.value||!isShopLink(item.url)))
+const menuItems=computed(()=>siteSettings.value.menu.filter(item=>(shopEnabled.value||!isShopLink(item.url)) && (siteSettings.value.blog_enabled || !/^\/blog(\/|$|[?#])/.test(item.url))))
 const routePath = ref(location.pathname)
 window.addEventListener('popstate', () => { routePath.value = location.pathname })
 const contentPath=computed(()=>routePath.value==='/' && siteSettings.value.home_slug ? '/'+siteSettings.value.home_slug : routePath.value)
+const isBlogRoute=computed(()=>/^\/blog(\/|$)/.test(routePath.value))
 const isContentRoute = computed(() => (routePath.value==='/' && !!siteSettings.value.home_slug) || (!['/','/catalog','/catalog/'].includes(routePath.value) && !/^\/product\/\d+\/?$/.test(routePath.value)))
 const products = ref([])
 const search = ref('')
@@ -87,7 +89,7 @@ onMounted(async () => {
 <template>
   <div v-if="!settingsReady" class="empty-state" role="status">{{settingsError || 'Загрузка сайта…'}}</div>
   <div v-else class="site-shell">
-    <div class="announcement"><span>{{siteSettings.name}}</span><span class="announcement-right">NOVA Engine · Preview 0.10</span></div>
+    <div class="announcement"><span>{{siteSettings.name}}</span><span class="announcement-right">NOVA Engine · Preview 0.11</span></div>
     <header class="site-header">
       <div class="container header-inner">
         <a href="/" class="logo" :aria-label="siteSettings.name+' — главная'"><img v-if="siteSettings.logo_url" :src="siteSettings.logo_url" :alt="siteSettings.name" class="site-logo-image"><span v-else class="logo-symbol">{{siteSettings.name.slice(0,1)}}</span><span class="site-name">{{siteSettings.name}}</span></a>
@@ -101,7 +103,9 @@ onMounted(async () => {
       </div>
     </header>
 
-    <ContentPage v-if="isContentRoute" :path="contentPath" :site-name="siteSettings.name" />
+    <BlogView v-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" />
+    <main v-else-if="isBlogRoute" class="container site-welcome"><h1>Страница не найдена</h1><a href="/">На главную →</a></main>
+    <ContentPage v-else-if="isContentRoute" :path="contentPath" :site-name="siteSettings.name" />
     <main v-else-if="!shopEnabled" class="container site-welcome"><h1>{{routePath==='/'?siteSettings.name:'Страница не найдена'}}</h1><a v-if="routePath!=='/'" href="/">На главную →</a></main>
     <main v-else-if="!activeProduct">
       <section class="hero-section">

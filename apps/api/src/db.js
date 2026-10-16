@@ -31,6 +31,14 @@ export async function initDatabase() {
     shop_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     menu JSONB NOT NULL DEFAULT '[{"label":"Главная","url":"/"},{"label":"Каталог","url":"/catalog"}]'::jsonb
   )`)
+  await pool.query(`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS blog_enabled BOOLEAN NOT NULL DEFAULT FALSE`)
+  await pool.query(`CREATE TABLE IF NOT EXISTS posts (
+    id BIGSERIAL PRIMARY KEY, title VARCHAR(200) NOT NULL, slug VARCHAR(120) NOT NULL UNIQUE,
+    excerpt TEXT NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '', category VARCHAR(100) NOT NULL DEFAULT '',
+    tags JSONB NOT NULL DEFAULT '[]'::jsonb, cover_url TEXT NOT NULL DEFAULT '', published BOOLEAN NOT NULL DEFAULT FALSE,
+    published_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`)
+  await pool.query('CREATE INDEX IF NOT EXISTS posts_publication_idx ON posts (published,published_at DESC,id DESC)')
   await pool.query('INSERT INTO site_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING')
   await pool.query(`CREATE TABLE IF NOT EXISTS products (
     id BIGSERIAL PRIMARY KEY,

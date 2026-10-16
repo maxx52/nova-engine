@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import PagesWorkspace from './PagesWorkspace.vue'
 import SiteSettings from './SiteSettings.vue'
+import BlogWorkspace from './BlogWorkspace.vue'
 const siteSettings=ref({shop_enabled:true})
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
 const page=ref('overview')
@@ -29,9 +30,9 @@ function updateKey(){const key=window.prompt('Введи ADMIN_API_KEY из фа
 async function apiWrite(url,method,body){const response=await fetch(url,{method,headers:{'x-admin-key':adminKey.value,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
 async function reload(){const r=await fetch('/api/products',{headers:{'x-admin-key':adminKey.value}});if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
-const allSections=[{id:'pages',icon:'▤',label:'Страницы'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
+const allSections=[{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories()]);error.value=''}catch(e){error.value=e.message}}}
-const sections=computed(()=>allSections.filter(s=>shopEnabled.value || !['products','categories','orders','customers'].includes(s.id)))
+const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(n)
 const total=computed(()=>products.value.reduce((a,p)=>a+p.price,0))
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
@@ -82,11 +83,12 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.10 <small>Демо-режим</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.11 <small>Демо-режим</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><button class="row-btn" @click="updateKey">🔑 Ключ API</button><div class="avatar">A</div></div></header>
     <main class="content">
+      <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" :key="adminKey" />
       <SiteSettings v-if="page==='settings'" :api-write="apiWrite" :key="adminKey" @saved="settingsSaved" />
       <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" :key="adminKey" />
       <div v-if="page==='overview'">
