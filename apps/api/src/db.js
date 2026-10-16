@@ -23,6 +23,15 @@ export async function initDatabase() {
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`)
   await pool.query(`ALTER TABLE pages ADD COLUMN IF NOT EXISTS sections JSONB NOT NULL DEFAULT '[]'::jsonb`)
+  await pool.query(`CREATE TABLE IF NOT EXISTS site_settings (
+    id INTEGER PRIMARY KEY CHECK (id=1),
+    name VARCHAR(100) NOT NULL DEFAULT 'NOVA',
+    logo_url TEXT NOT NULL DEFAULT '',
+    home_page_id BIGINT REFERENCES pages(id) ON DELETE SET NULL,
+    shop_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    menu JSONB NOT NULL DEFAULT '[{"label":"Главная","url":"/"},{"label":"Каталог","url":"/catalog"}]'::jsonb
+  )`)
+  await pool.query('INSERT INTO site_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING')
   await pool.query(`CREATE TABLE IF NOT EXISTS products (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(150) NOT NULL,

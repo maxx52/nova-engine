@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import { registerSettings, registerShopGuard } from './settings.js'
 import { registerPages } from './pages.js'
 import multipart from '@fastify/multipart'
 import { fileTypeFromBuffer } from 'file-type'
@@ -27,6 +28,9 @@ function requireAdmin(request, reply, done) {
   done()
 }
 registerPages(app, pool, requireAdmin)
+registerSettings(app, pool, requireAdmin)
+registerShopGuard(app,pool,adminKey)
+
 function validateProduct(body) {
   if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 150) return 'Название: от 1 до 150 символов'
   if (typeof body.category !== 'string' || !body.category.trim() || body.category.trim().length > 100) return 'Укажите категорию'
@@ -47,7 +51,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.9.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.10.0', database: 'connected' }
 })
 app.get('/api/products', async () => {
   const result = await pool.query('SELECT '+productFields+' FROM products ORDER BY id')

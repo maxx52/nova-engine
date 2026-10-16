@@ -2,9 +2,16 @@
 import { ref, computed, onMounted } from 'vue'
 import ContentPage from './ContentPage.vue'
 
+const siteSettings=ref({name:'NOVA',logo_url:'',home_slug:null,shop_enabled:true,menu:[]})
+const settingsReady=ref(false)
+const settingsError=ref('')
+const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
+const isShopLink=url=>/^\/(catalog|product)(\/|$|[?#])/.test(url) || url==='/#catalog' || url==='/#advantages'
+const menuItems=computed(()=>siteSettings.value.menu.filter(item=>shopEnabled.value||!isShopLink(item.url)))
 const routePath = ref(location.pathname)
 window.addEventListener('popstate', () => { routePath.value = location.pathname })
-const isContentRoute = computed(() => routePath.value !== '/' && !/^\/product\/\d+\/?$/.test(routePath.value))
+const contentPath=computed(()=>routePath.value==='/' && siteSettings.value.home_slug ? '/'+siteSettings.value.home_slug : routePath.value)
+const isContentRoute = computed(() => (routePath.value==='/' && !!siteSettings.value.home_slug) || (!['/','/catalog','/catalog/'].includes(routePath.value) && !/^\/product\/\d+\/?$/.test(routePath.value)))
 const products = ref([])
 const search = ref('')
 const attributeFilter = ref('')
@@ -61,35 +68,41 @@ function scrollToCatalog() { document.getElementById('catalog')?.scrollIntoView(
 onMounted(async () => {
   window.addEventListener('popstate',syncUrl)
   try {
+    const settingsResponse=await fetch('/api/settings')
+    if(!settingsResponse.ok)throw Error('Не удалось загрузить настройки сайта')
+    siteSettings.value=await settingsResponse.json()
+    document.title=siteSettings.value.name
+    settingsReady.value=true
+    if(!shopEnabled.value)return
     const response = await fetch('/api/products')
     if (!response.ok) throw new Error('Не удалось получить товары')
     products.value = (await response.json()).filter(p=>p.published!==false)
     const cats=await fetch('/api/categories');if(cats.ok)categoryRows.value=await cats.json()
     syncUrl()
-  } catch (e) { error.value = e.message }
+  } catch (e) { if(!settingsReady.value)settingsError.value=e.message;else error.value=e.message }
   finally { loading.value = false }
 })
 </script>
 
 <template>
-  <div class="site-shell">
-    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.9</span></div>
+  <div v-if="!settingsReady" class="empty-state" role="status">{{settingsError || 'Загрузка сайта…'}}</div>
+  <div v-else class="site-shell">
+    <div class="announcement"><span>{{siteSettings.name}}</span><span class="announcement-right">NOVA Engine · Preview 0.10</span></div>
     <header class="site-header">
       <div class="container header-inner">
-        <a href="/" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>
+        <a href="/" class="logo" :aria-label="siteSettings.name+' — главная'"><img v-if="siteSettings.logo_url" :src="siteSettings.logo_url" :alt="siteSettings.name" class="site-logo-image"><span v-else class="logo-symbol">{{siteSettings.name.slice(0,1)}}</span><span class="site-name">{{siteSettings.name}}</span></a>
         <nav class="main-nav" :class="{ 'nav-open': mobileMenu }" aria-label="Основная навигация">
-          <a href="/" class="nav-active" @click="mobileMenu = false">Главная</a>
-          <a href="#catalog" @click="mobileMenu = false">Каталог</a>
-          <a href="#advantages" @click="mobileMenu = false">Преимущества</a>
+          <a v-for="(item,index) in menuItems" :key="index" :href="item.url" @click="mobileMenu=false">{{item.label}}</a>
         </nav>
         <div class="header-actions">
           <button class="icon-button mobile-nav-button" aria-label="Меню" @click="mobileMenu = !mobileMenu">☰</button>
-          <button class="cart-trigger" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">Корзина</span><span class="cart-count">{{ itemCount }}</span></button>
+          <button v-if="shopEnabled" class="cart-trigger" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">Корзина</span><span class="cart-count">{{ itemCount }}</span></button>
         </div>
       </div>
     </header>
 
-    <ContentPage v-if="isContentRoute" :path="routePath" />
+    <ContentPage v-if="isContentRoute" :path="contentPath" :site-name="siteSettings.name" />
+    <main v-else-if="!shopEnabled" class="container site-welcome"><h1>{{routePath==='/'?siteSettings.name:'Страница не найдена'}}</h1><a v-if="routePath!=='/'" href="/">На главную →</a></main>
     <main v-else-if="!activeProduct">
       <section class="hero-section">
         <div class="container hero-grid">
@@ -151,8 +164,15 @@ onMounted(async () => {
         </div>
       </div>
     </main>
-    <footer class="footer"><div class="container footer-inner"><div class="footer-brand">NOVA<span>.</span> <small>ENGINE</small></div><span>Демонстрация платформы · {{ new Date().getFullYear() }}</span><span>Создано на Vue 3 + JavaScript</span></div></footer>
-    <div v-if="cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">ВАШИ ПОКУПКИ</span><h2>Корзина ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><div v-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>В корзине пока пусто</h3><p>Добавьте понравившиеся товары из каталога.</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">К покупкам ↗</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.id" class="cart-item"><span class="cart-item-art">{{ productIcons[(item.id - 1) % productIcons.length] || '📦' }}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length" class="drawer-bottom"><div class="total-row"><span>Итого</span><strong>{{ currency(cartTotal) }}</strong></div><p>Демонстрационная корзина — оформление реальных заказов появится позже.</p><button class="primary-button" disabled>Оформление скоро появится</button></div></aside></div>
+    <footer class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>Демонстрация платформы · {{ new Date().getFullYear() }}</span><span>Создано на Vue 3 + JavaScript</span></div></footer>
+    <div v-if="shopEnabled && cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">ВАШИ ПОКУПКИ</span><h2>Корзина ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><div v-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>В корзине пока пусто</h3><p>Добавьте понравившиеся товары из каталога.</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">К покупкам ↗</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.id" class="cart-item"><span class="cart-item-art">{{ productIcons[(item.id - 1) % productIcons.length] || '📦' }}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length" class="drawer-bottom"><div class="total-row"><span>Итого</span><strong>{{ currency(cartTotal) }}</strong></div><p>Демонстрационная корзина — оформление реальных заказов появится позже.</p><button class="primary-button" disabled>Оформление скоро появится</button></div></aside></div>
     <div v-if="notice" class="toast">{{ notice }} ✓</div>
   </div>
 </template>
+
+<style scoped>
+.site-logo-image { max-width:100px;max-height:48px;object-fit:contain; }
+.site-name { max-width:260px;overflow-wrap:anywhere;line-height:1.2; }
+.site-welcome { min-height:65vh;padding-top:80px;padding-bottom:80px;overflow-wrap:anywhere; }
+@media(max-width:600px){.site-name{max-width:160px;font-size:20px;}.site-logo-image{max-width:64px;}}
+</style>
