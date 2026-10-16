@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import PagesWorkspace from './PagesWorkspace.vue'
 const page=ref('overview')
 const products=ref([])
 const loading=ref(true)
@@ -25,7 +26,7 @@ function updateKey(){const key=window.prompt('Введи ADMIN_API_KEY из фа
 async function apiWrite(url,method,body){const response=await fetch(url,{method,headers:{'x-admin-key':adminKey.value,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
 async function reload(){const r=await fetch('/api/products');if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
-const sections=[{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
+const sections=[{id:'pages',icon:'▤',label:'Страницы'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(n)
 const total=computed(()=>products.value.reduce((a,p)=>a+p.price,0))
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
@@ -76,13 +77,14 @@ onMounted(async()=>{try{await Promise.all([reload(),loadCategories()])}catch(e){
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.7 <small>Демо-режим</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.8 <small>Демо-режим</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><button class="row-btn" @click="updateKey">🔑 Ключ API</button><div class="avatar">A</div></div></header>
     <main class="content">
+      <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" :key="adminKey" />
       <div v-if="page==='overview'">
-        <div class="page-title"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Добро пожаловать в NOVA 👋</h1><p>Управляйте своим магазином в одном месте.</p></div><button class="primary-btn" @click="navigate('products');edit()">＋ Добавить товар</button></div>
+        <div class="page-title"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Добро пожаловать в NOVA 👋</h1><p>Управляйте содержимым сайта и каталогом в одном месте.</p></div><button class="primary-btn" @click="navigate('products');edit()">＋ Добавить товар</button></div>
         <div class="stats-grid"><div class="stat-card"><span>Всего товаров</span><strong>{{products.length}}</strong><small>Товары из базы данных</small><div class="stat-icon">▦</div></div><div class="stat-card"><span>Сумма цен каталога</span><strong>{{money(total)}}</strong><small>Не выручка магазина</small><div class="stat-icon">₽</div></div><div class="stat-card"><span>Заказы</span><strong>—</strong><small>Модуль пока не подключён</small><div class="stat-icon">▤</div></div><div class="stat-card"><span>Покупатели</span><strong>—</strong><small>Модуль пока не подключён</small><div class="stat-icon">♙</div></div></div>
         <div class="panel"><div class="panel-heading"><div><h2>Недавно добавленные товары</h2><p>Данные из PostgreSQL через NOVA API</p></div><button class="text-btn" @click="navigate('products')">Все товары →</button></div><div v-if="loading" class="empty">Загрузка...</div><div v-else-if="error" class="alert">{{error}}</div><div v-else class="table-scroll"><table><thead><tr><th>Товар</th><th>Категория</th><th>Цена</th></tr></thead><tbody><tr v-for="p in products.slice(-5).reverse()" :key="p.id"><td><span class="product-marker">📦</span><strong>{{p.name}}</strong></td><td>{{p.category}}</td><td class="table-price">{{money(p.price)}}</td></tr></tbody></table></div></div>
       </div>

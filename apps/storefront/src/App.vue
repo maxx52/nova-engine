@@ -1,6 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import ContentPage from './ContentPage.vue'
 
+const routePath = ref(location.pathname)
+window.addEventListener('popstate', () => { routePath.value = location.pathname })
+const isContentRoute = computed(() => routePath.value !== '/' && !/^\/product\/\d+\/?$/.test(routePath.value))
 const products = ref([])
 const search = ref('')
 const attributeFilter = ref('')
@@ -19,8 +23,8 @@ const chosenVariant = ref(-1)
 const selectedVariant = computed(()=>activeProduct.value?.variants?.[chosenVariant.value] || null)
 const currentImage = ref('')
 const productImages = computed(() => activeProduct.value ? (activeProduct.value.images?.length ? activeProduct.value.images : (activeProduct.value.image_url ? [activeProduct.value.image_url] : [])) : [])
-function openProduct(product) { chosenVariant.value=-1;activeProduct.value = product; currentImage.value = productImages.value[0] || ''; history.pushState({ productId: product.id }, '', '/product/' + product.id); window.scrollTo({top:0,behavior:'smooth'}) }
-function closeProduct() { activeProduct.value = null; history.pushState({}, '', '/'); window.scrollTo({top:0,behavior:'smooth'}) }
+function openProduct(product) { chosenVariant.value=-1;activeProduct.value = product; currentImage.value = productImages.value[0] || ''; routePath.value = '/product/' + product.id; history.pushState({ productId: product.id }, '', '/product/' + product.id); window.scrollTo({top:0,behavior:'smooth'}) }
+function closeProduct() { activeProduct.value = null; routePath.value = '/'; history.pushState({}, '', '/'); window.scrollTo({top:0,behavior:'smooth'}) }
 function syncUrl() { chosenVariant.value=-1;const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
 const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
 const art = {
@@ -69,12 +73,12 @@ onMounted(async () => {
 
 <template>
   <div class="site-shell">
-    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.7</span></div>
+    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.8</span></div>
     <header class="site-header">
       <div class="container header-inner">
-        <a href="#" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>
+        <a href="/" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>
         <nav class="main-nav" :class="{ 'nav-open': mobileMenu }" aria-label="Основная навигация">
-          <a href="#" class="nav-active" @click="mobileMenu = false">Главная</a>
+          <a href="/" class="nav-active" @click="mobileMenu = false">Главная</a>
           <a href="#catalog" @click="mobileMenu = false">Каталог</a>
           <a href="#advantages" @click="mobileMenu = false">Преимущества</a>
         </nav>
@@ -85,7 +89,8 @@ onMounted(async () => {
       </div>
     </header>
 
-    <main v-if="!activeProduct">
+    <ContentPage v-if="isContentRoute" :path="routePath" />
+    <main v-else-if="!activeProduct">
       <section class="hero-section">
         <div class="container hero-grid">
           <div class="hero-copy">

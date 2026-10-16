@@ -13,6 +13,15 @@ const seeds = [
   ['Органайзер для стола','Дом',990,'Порядок на рабочем месте.']
 ]
 export async function initDatabase() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS pages (
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(150) NOT NULL,
+    slug VARCHAR(120) NOT NULL UNIQUE,
+    content TEXT NOT NULL DEFAULT '',
+    published BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`)
   await pool.query(`CREATE TABLE IF NOT EXISTS products (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
