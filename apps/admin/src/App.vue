@@ -7,7 +7,7 @@ const error=ref('')
 const filter=ref('')
 const dialog=ref(false)
 const editingId=ref(null)
-const form=ref({name:'',category:'Электроника',price:0,description:'',sku:'',stock:0,image_url:'',published:true})
+const form=ref({name:'',category:'Электроника',price:0,description:'',sku:'',stock:0,image_url:'',published:true,images:[]})
 const categoryRows=ref([])
 const uploading=ref(false)
 const categoryName=ref('')
@@ -26,7 +26,7 @@ const total=computed(()=>products.value.reduce((a,p)=>a+p.price,0))
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
 async function loadCategories(){const r=await fetch('/api/categories');if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
 function navigate(id){page.value=id;sidebar.value=false}
-function edit(product=null){editingId.value=product?.id??null;form.value=product?{name:product.name,category:product.category,price:product.price,description:product.description,sku:product.sku||'',stock:product.stock||0,image_url:product.image_url||'',published:product.published!==false}:{name:'',category:categories.value[0]||'Другое',price:0,description:'',sku:'',stock:0,image_url:'',published:true};dialog.value=true}
+function edit(product=null){editingId.value=product?.id??null;form.value=product?{name:product.name,category:product.category,price:product.price,description:product.description,sku:product.sku||'',stock:product.stock||0,image_url:product.image_url||'',published:product.published!==false,images:[...(product.images?.length?product.images:(product.image_url?[product.image_url]:[]))]}:{name:'',category:categories.value[0]||'Другое',price:0,description:'',sku:'',stock:0,image_url:'',published:true,images:[]};dialog.value=true}
 async function save(){
   if(busy.value||!form.value.name.trim()||!Number.isFinite(Number(form.value.price))||Number(form.value.price)<0)return
   if(!adminKey.value){updateKey();if(!adminKey.value)return}
@@ -44,10 +44,13 @@ async function remove(id){
 }
 async function uploadImage(event){
  const file=event.target.files?.[0];if(!file)return
+ if(form.value.images.length>=12){saveError.value='Максимум 12 фотографий';return}
  if(!adminKey.value){updateKey();if(!adminKey.value)return}
  uploading.value=true;saveError.value=''
- try{const body=new FormData();body.append('file',file);const response=await fetch('/api/uploads',{method:'POST',headers:{'x-admin-key':adminKey.value},body});const data=await response.json();if(!response.ok)throw Error(data.error||'Ошибка загрузки');form.value.image_url=data.url}catch(e){saveError.value=e.message}finally{uploading.value=false;event.target.value=''}
+ try{const body=new FormData();body.append('file',file);const response=await fetch('/api/uploads',{method:'POST',headers:{'x-admin-key':adminKey.value},body});const data=await response.json();if(!response.ok)throw Error(data.error||'Ошибка загрузки');form.value.images=[...form.value.images,data.url].slice(0,12);if(!form.value.image_url)form.value.image_url=data.url}catch(e){saveError.value=e.message}finally{uploading.value=false;event.target.value=''}
 }
+function removePhoto(url){form.value.images=form.value.images.filter(x=>x!==url);if(form.value.image_url===url)form.value.image_url=form.value.images[0]||''}
+function mainPhoto(url){form.value.image_url=url}
 async function addCategory(){
  if(!categoryName.value.trim())return
  if(!adminKey.value){updateKey();if(!adminKey.value)return}
@@ -63,7 +66,7 @@ onMounted(async()=>{try{await Promise.all([reload(),loadCategories()])}catch(e){
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.2 <small>Демо-режим</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.5 <small>Демо-режим</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><button class="row-btn" @click="updateKey">🔑 Ключ API</button><div class="avatar">A</div></div></header>
@@ -78,6 +81,6 @@ onMounted(async()=>{try{await Promise.all([reload(),loadCategories()])}catch(e){
       <div v-if="['orders','customers','settings'].includes(page)"><div class="page-title"><div><span class="eyebrow">NOVA ENGINE</span><h1>{{sections.find(s=>s.id===page)?.label}}</h1><p>Модуль появится на следующем этапе.</p></div></div><div class="coming-soon"><div>✧</div><h2>Раздел в разработке</h2><p>Сейчас доступно управление демонстрационным каталогом. Заказы, пользователи и настройки появятся после разработки авторизации и других модулей.</p></div></div>
     </main>
   </div>
-  <div v-if="dialog" class="modal-backdrop" @click.self="dialog=false"><div class="modal"><div class="modal-heading"><h2>{{editingId===null?'Новый товар':'Редактирование товара'}}</h2><button @click="dialog=false">×</button></div><form @submit.prevent="save"><label>Название товара<input v-model="form.name" required maxlength="150" placeholder="Например, беспроводные наушники"></label><label>Категория<select v-model="form.category"><option v-for="c in categories" :key="c">{{c}}</option></select></label><label>Цена, ₽<input v-model.number="form.price" type="number" min="0" step="0.01" required></label><label>Артикул (SKU)<input v-model="form.sku" maxlength="100" placeholder="Например, NOVA-001"></label><label>Остаток на складе<input v-model.number="form.stock" type="number" min="0" step="1" required></label><label>Фотография товара<input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadImage"><small v-if="uploading">Загружается...</small><img v-if="form.image_url" :src="form.image_url" alt="Фотография товара" style="width:140px;height:110px;object-fit:contain;border-radius:8px;background:#f5f5f5"><button v-if="form.image_url" type="button" class="row-btn" @click="form.image_url=''">Убрать фото</button></label><label style="flex-direction:row;align-items:center"><input type="checkbox" v-model="form.published"> Опубликован</label><label>Описание<textarea v-model="form.description" rows="3" placeholder="Краткое описание"></textarea></label><p v-if="saveError" class="alert">{{saveError}}</p><div class="modal-actions"><button type="button" class="cancel-btn" @click="dialog=false">Отмена</button><button type="submit" class="primary-btn" :disabled="busy">{{busy?'Сохранение…':'Сохранить'}}</button></div></form></div></div>
+  <div v-if="dialog" class="modal-backdrop" @click.self="dialog=false"><div class="modal"><div class="modal-heading"><h2>{{editingId===null?'Новый товар':'Редактирование товара'}}</h2><button @click="dialog=false">×</button></div><form @submit.prevent="save"><label>Название товара<input v-model="form.name" required maxlength="150" placeholder="Например, беспроводные наушники"></label><label>Категория<select v-model="form.category"><option v-for="c in categories" :key="c">{{c}}</option></select></label><label>Цена, ₽<input v-model.number="form.price" type="number" min="0" step="0.01" required></label><label>Артикул (SKU)<input v-model="form.sku" maxlength="100" placeholder="Например, NOVA-001"></label><label>Остаток на складе<input v-model.number="form.stock" type="number" min="0" step="1" required></label><label>Фотографии товара (до 12)<input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadImage"><small v-if="uploading">Загружается...</small><div style="display:flex;flex-wrap:wrap;gap:10px"><div v-for="url in form.images" :key="url" style="display:flex;flex-direction:column;gap:5px"><img :src="url" alt="Фото товара" style="width:105px;height:90px;object-fit:contain;background:#f5f5f5;border-radius:8px"><button type="button" class="row-btn" @click="mainPhoto(url)">{{form.image_url===url?'★ Главное':'Сделать главным'}}</button><button type="button" class="row-btn danger" @click="removePhoto(url)">Удалить</button></div></div></label><label style="flex-direction:row;align-items:center"><input type="checkbox" v-model="form.published"> Опубликован</label><label>Описание<textarea v-model="form.description" rows="3" placeholder="Краткое описание"></textarea></label><p v-if="saveError" class="alert">{{saveError}}</p><div class="modal-actions"><button type="button" class="cancel-btn" @click="dialog=false">Отмена</button><button type="submit" class="primary-btn" :disabled="busy">{{busy?'Сохранение…':'Сохранить'}}</button></div></form></div></div>
 </div>
 </template>
