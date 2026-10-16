@@ -35,6 +35,7 @@ export async function initDatabase() {
     parent_id BIGINT REFERENCES categories(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`)
+  await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS attribute_templates JSONB NOT NULL DEFAULT '[]'::jsonb`)
   await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
   const result = await pool.query('SELECT COUNT(*)::integer AS count FROM products')
   if(result.rows[0].count === 0) {
