@@ -12,7 +12,7 @@ const app = Fastify({ logger: true, bodyLimit: 6 * 1024 * 1024 })
 await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } })
 const uploadDirectory = fileURLToPath(new URL('../../../uploads/', import.meta.url))
 await mkdir(uploadDirectory, { recursive: true })
-const productFields = 'id,name,category,price,description,sku,stock,image_url,published,images'
+const productFields = 'id,name,category,price,description,sku,stock,image_url,published,images,attributes,variants'
 const adminKey = process.env.ADMIN_API_KEY
 if (!adminKey || adminKey.length < 16) {
   console.error('Set ADMIN_API_KEY (at least 16 characters) in .env before starting API')
@@ -36,11 +36,16 @@ function validateProduct(body) {
   if (body.image_url !== undefined && (typeof body.image_url !== 'string' || !/^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(body.image_url) && body.image_url !== '')) return 'Некорректное изображение'
   if(body.images !== undefined && (!Array.isArray(body.images) || body.images.length > 12 || body.images.some(url => typeof url !== 'string' || !/^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(url)) || new Set(body.images).size !== body.images.length)) return 'Галерея: до 12 уникальных изображений'
   if(body.images && body.image_url && !body.images.includes(body.image_url)) return 'Главное фото должно быть в галерее'
+  const attrs=body.attributes??[]
+  if(!Array.isArray(attrs)||attrs.length>50||attrs.some(a=>!a||typeof a.name!=='string'||!a.name.trim()||a.name.length>80||typeof a.value!=='string'||!a.value.trim()||a.value.length>300))return 'Некорректные характеристики'
+  const variants=body.variants??[]
+  if(!Array.isArray(variants)||variants.length>100||variants.some(v=>!v||typeof v.name!=='string'||!v.name.trim()||v.name.length>120||typeof v.sku!=='string'||v.sku.length>100||typeof v.price!=='number'||!Number.isFinite(v.price)||v.price<0||v.price>9999999999.99||!Number.isSafeInteger(v.stock)||v.stock<0))return 'Некорректные варианты товара'
+  if(new Set(variants.map(v=>v.name.trim().toLowerCase())).size!==variants.length)return 'Названия вариантов должны быть уникальными'
   return null
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.5.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.6.0', database: 'connected' }
 })
 app.get('/api/products', async () => {
   const result = await pool.query('SELECT '+productFields+' FROM products ORDER BY id')
@@ -50,8 +55,8 @@ app.get('/api/products/:id',async(request,reply)=>{const id=Number(request.param
 app.post('/api/products', { preHandler: requireAdmin }, async (request, reply) => {
   const err = validateProduct(request.body)
   if (err) return reply.code(400).send({ error: err })
-  const { name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[] } = request.body
-  const result = await pool.query('INSERT INTO products (name,category,price,description,sku,stock,image_url,published,images) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images)])
+  const { name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[],attributes=[],variants=[] } = request.body
+  const result = await pool.query('INSERT INTO products (name,category,price,description,sku,stock,image_url,published,images,attributes,variants) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants)])
   return reply.code(201).send(productJson(result.rows[0]))
 })
 app.put('/api/products/:id', { preHandler: requireAdmin }, async (request, reply) => {
@@ -59,8 +64,8 @@ app.put('/api/products/:id', { preHandler: requireAdmin }, async (request, reply
   if (!Number.isSafeInteger(id) || id <= 0) return reply.code(400).send({ error: 'Неверный ID' })
   const err = validateProduct(request.body)
   if (err) return reply.code(400).send({ error: err })
-  const {name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[]}=request.body
-  const result = await pool.query('UPDATE products SET name=$1,category=$2,price=$3,description=$4,sku=$5,stock=$6,image_url=$7,published=$8,images=$9,updated_at=NOW() WHERE id=$10 RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),id])
+  const {name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[],attributes=[],variants=[]}=request.body
+  const result = await pool.query('UPDATE products SET name=$1,category=$2,price=$3,description=$4,sku=$5,stock=$6,image_url=$7,published=$8,images=$9,attributes=$10,variants=$11,updated_at=NOW() WHERE id=$12 RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants),id])
   if (!result.rowCount) return reply.code(404).send({error:'Товар не найден'})
   return productJson(result.rows[0])
 })
