@@ -1,4 +1,5 @@
 <script setup>
+import MediaPicker from './MediaPicker.vue'
 import { adminFetch } from './adminApi.js'
 import { ref,onMounted } from 'vue'
 const props=defineProps({apiWrite:Function})
@@ -13,7 +14,7 @@ function move(index,delta){const target=index+delta;if(target<0||target>=form.va
 <div><div class="page-title"><div><span class="eyebrow">NOVA CMS</span><h1>Настройки сайта</h1><p>Название, главная страница, меню и модули.</p></div></div><p v-if="error" class="alert" role="alert">{{error}}</p><p v-if="notice" class="settings-notice" role="status">{{notice}}</p>
 <form v-if="form" class="panel settings-form" @submit.prevent="save"><fieldset :disabled="busy">
 <label>Название сайта<input v-model="form.name" required maxlength="100"></label>
-<label>Логотип<input type="file" accept="image/jpeg,image/png,image/webp" @change="upload"><small>JPG, PNG, WebP до 5 МБ</small></label><div v-if="form.logo_url"><img :src="form.logo_url" alt="Логотип" class="settings-logo"><button type="button" class="row-btn" @click="form.logo_url=''">Убрать логотип</button></div>
+<MediaPicker :disabled="busy" @select="form.logo_url=$event" /><label>Логотип<input type="file" accept="image/jpeg,image/png,image/webp" @change="upload"><small>JPG, PNG, WebP до 5 МБ</small></label><div v-if="form.logo_url"><img :src="form.logo_url" alt="Логотип" class="settings-logo"><button type="button" class="row-btn" @click="form.logo_url=''">Убрать логотип</button></div>
 <label>Главная страница<select v-model="form.home_page_id"><option :value="null">{{form.shop_enabled?'Демонстрационная страница магазина':'Стартовая страница с названием сайта'}}</option><option v-if="form.home_page_id && !pages.some(p=>String(p.id)===form.home_page_id)" :value="form.home_page_id">Выбранная страница недоступна — выберите другую</option><option v-for="page in pages" :key="page.id" :value="String(page.id)">{{page.title}} (/{{page.slug}})</option></select><small>Выбранная опубликованная страница будет открываться по адресу /.</small></label>
 <label class="settings-check"><input type="checkbox" v-model="form.shop_enabled"> Включить магазин</label><p>При отключении каталог и корзина исчезнут с сайта. Товары сохранятся.</p>
 <label class="settings-check"><input type="checkbox" v-model="form.blog_enabled"> Включить блог</label><p>Статьи доступны на /blog. При отключении статьи сохраняются. Добавьте ссылку /blog в меню ниже.</p>

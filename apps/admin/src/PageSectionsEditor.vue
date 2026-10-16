@@ -1,4 +1,5 @@
 <script setup>
+import MediaPicker from './MediaPicker.vue'
 import { adminFetch } from './adminApi.js'
 import { ref } from 'vue'
 const emit = defineEmits(['uploading'])
@@ -37,6 +38,7 @@ async function upload(event, section) {
       <header><strong>{{ index + 1 }}. {{ names[section.type] }}</strong><div><button type="button" class="row-btn" :disabled="index===0" aria-label="Поднять секцию" @click="move(index,-1)">↑</button><button type="button" class="row-btn" :disabled="index===sections.length-1" aria-label="Опустить секцию" @click="move(index,1)">↓</button><button type="button" class="row-btn danger" @click="sections.splice(index,1)">Удалить</button></div></header>
       <template v-if="section.type !== 'image'"><label>Заголовок<input v-model="section.title" maxlength="300"></label><label>Текст<textarea v-model="section.text" rows="4" maxlength="20000"></textarea></label></template>
       <template v-if="section.type !== 'text'">
+        <MediaPicker :disabled="disabled||uploading" @select="section.image_url=$event" />
         <label>{{ section.type==='hero' ? 'Фон обложки' : 'Изображение' }}<input type="file" accept="image/jpeg,image/png,image/webp" @change="upload($event,section)"><small>JPG, PNG, WebP до 5 МБ</small></label>
         <div v-if="section.image_url"><img :src="section.image_url" alt="Предпросмотр" class="section-preview"><button type="button" class="row-btn" @click="section.image_url=''">Убрать изображение</button></div>
       </template>

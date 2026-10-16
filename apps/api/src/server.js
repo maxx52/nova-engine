@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import {syncMedia,registerMedia} from './media.js'
 import { registerAuth } from './auth.js'
 import { registerBlog } from './blog.js'
 import { registerSettings, registerShopGuard } from './settings.js'
@@ -23,6 +24,7 @@ if (!adminKey || adminKey.length < 16) {
   process.exit(1)
 }
 const {requireAdmin,isAdmin}=registerAuth(app,pool,{setupKey:adminKey,secure:process.env.SESSION_SECURE==='true'||process.env.NODE_ENV==='production',origins:(process.env.ADMIN_ORIGINS||'http://localhost:5174,http://127.0.0.1:5174').split(',').map(s=>s.trim())})
+registerMedia(app,pool,requireAdmin,uploadDirectory)
 registerPages(app, pool, requireAdmin)
 registerSettings(app, pool, requireAdmin)
 registerBlog(app, pool, requireAdmin)
@@ -48,7 +50,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.12.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.13.0', database: 'connected' }
 })
 app.get('/api/products', async (request) => {
   const result = await pool.query('SELECT '+productFields+' FROM products'+(await isAdmin(request)?'':' WHERE published=TRUE')+' ORDER BY id')
@@ -109,6 +111,8 @@ app.post('/api/categories',{preHandler:requireAdmin},async(request,reply)=>{
 app.get('/uploads/:filename',async(request,reply)=>{
   const {filename}=request.params
   if(!/^[a-f0-9-]{36}\.(png|jpg|webp)$/.test(filename)) return reply.code(404).send({error:'Файл не найден'})
+  const deleted=await pool.query('SELECT url FROM media_files WHERE url=$1 AND deleted_at IS NOT NULL',['/uploads/'+filename])
+  if(deleted.rowCount)return reply.code(404).send({error:'Файл не найден'})
   try {
     const bytes=await readFile(join(uploadDirectory,filename))
     const type=filename.endsWith('.png')?'image/png':filename.endsWith('.webp')?'image/webp':'image/jpeg'
@@ -127,9 +131,16 @@ app.post('/api/uploads',{preHandler:requireAdmin},async(request,reply)=>{
   if(!ext) return reply.code(415).send({error:'Разрешены только JPG, PNG и WebP'})
   const name=randomUUID()+'.'+ext
   await writeFile(join(uploadDirectory,name),data,{flag:'wx'})
+  try{await pool.query('INSERT INTO media_files (url,original_name,size,mime) VALUES ($1,$2,$3,$4)',['/uploads/'+name,(file.filename||name).split(/[\\/]/).pop().replace(/[\x00-\x1f]/g,'').slice(0,200)||name,data.length,type.mime])}
+  catch(e){const {unlink}=await import('node:fs/promises');await unlink(join(uploadDirectory,name)).catch(()=>{});throw e}
   return reply.code(201).send({url:'/uploads/'+name})
+})
+app.setErrorHandler((error,request,reply)=>{
+ if(error.constraint==='nova_media_available')return reply.code(400).send({error:'Изображение удалено или отсутствует. Выберите другой файл.'})
+ request.log.error(error);return reply.code(error.statusCode||500).send({error:error.statusCode&&error.statusCode<500?error.message:'Ошибка сервера'})
 })
 try {
   await initDatabase()
+  await syncMedia(pool,uploadDirectory)
   await app.listen({port:Number(process.env.PORT||3001),host:process.env.API_HOST||'127.0.0.1'})
 } catch(error) {app.log.error(error);await pool.end();process.exit(1)}
