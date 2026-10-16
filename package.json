@@ -8,9 +8,11 @@
   ],
   "scripts": {
     "dev": "concurrently -k \"npm run dev -w @nova/api\" \"npm run dev -w @nova/storefront\"",
-    "build": "npm run build -w @nova/storefront",
+    "build": "npm run build -w @nova/storefront && npm run build -w @nova/admin",
     "dev:web": "npm run dev -w @nova/storefront",
-    "dev:api": "npm run dev -w @nova/api"
+    "dev:api": "npm run dev -w @nova/api",
+    "dev:admin": "npm run dev -w @nova/admin",
+    "dev:all": "concurrently -k \"npm run dev -w @nova/api\" \"npm run dev -w @nova/storefront\" \"npm run dev -w @nova/admin\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
