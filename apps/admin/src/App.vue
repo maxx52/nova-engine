@@ -77,7 +77,7 @@ onMounted(async()=>{try{await Promise.all([reload(),loadCategories()])}catch(e){
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.8 <small>Демо-режим</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.9 <small>Демо-режим</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><button class="row-btn" @click="updateKey">🔑 Ключ API</button><div class="avatar">A</div></div></header>

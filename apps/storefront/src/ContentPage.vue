@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue'
+import PageSections from './PageSections.vue'
 const props = defineProps({ path: String })
 const page = ref(null), loading = ref(false), error = ref('')
 let version = 0
@@ -20,7 +21,7 @@ watch(() => props.path, async path => {
   <main class="container content-page">
     <p v-if="loading" role="status">Загрузка страницы…</p>
     <template v-else-if="error"><h1>{{ error }}</h1><a href="/">На главную →</a></template>
-    <article v-else-if="page"><h1>{{ page.title }}</h1><div class="page-text">{{ page.content }}</div></article>
+    <article v-else-if="page"><h1>{{ page.title }}</h1><div class="page-text">{{ page.content }}</div><PageSections :sections="page.sections || []" /></article>
   </main>
 </template>
 <style scoped>

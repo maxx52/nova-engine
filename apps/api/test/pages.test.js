@@ -18,3 +18,43 @@ test('public reads require publication; administrative routes require authentica
   assert.equal(reply.status,404);assert.equal(result.error,'Страница не найдена')
   assert.match(queries[0].sql,/published=TRUE/);assert.deepEqual(queries[0].args,['draft'])
 })
+
+test('sections preserve old pages and reject unsafe links and invalid section data', async () => {
+  const { validateSections } = await import('../src/pages.js')
+  const hero = { id:'hero-1',type:'hero',title:'Привет',text:'Текст',image_url:'',alt:'',caption:'',button_text:'О нас',button_url:'/about' }
+  assert.equal(validatePage(valid),null)
+  assert.equal(validatePage({...valid,sections:[hero]}),null)
+  for(const button_url of ['javascript:alert(1)','//evil.test','/\\evil.test','data:text/html,hi','https://a.test/\nfoo']) assert.ok(validateSections([{...hero,button_url}]))
+  for(const button_url of ['/about','/#contacts','https://example.com/path']) assert.equal(validateSections([{...hero,button_url}]),null)
+  assert.ok(validateSections([hero,hero]))
+  assert.ok(validateSections([{...hero,type:'script'}]))
+  assert.ok(validateSections([{...hero,image_url:'https://example.com/a.jpg'}]))
+  assert.ok(validateSections(Array.from({length:51},(_,i)=>({...hero,id:String(i)}))))
+})
+
+test('HTTP page writes persist ordered sections as JSON and require admin key', async () => {
+  const { default: Fastify } = await import('fastify')
+  const app = Fastify()
+  const calls = []
+  const pool = { query: async (sql,args) => {
+    calls.push({sql,args})
+    return {rowCount:1,rows:[{id:'7',title:args[0],slug:args[1],content:args[2],published:args[3],sections:JSON.parse(args[4])}]}
+  }}
+  registerPages(app,pool,(req,reply,done)=>{if(req.headers['x-admin-key']!=='secret') return reply.code(401).send({error:'Unauthorized'});done()})
+  try {
+    const section = {id:'image-1',type:'image',title:'',text:'',image_url:'/uploads/00000000-0000-0000-0000-000000000000.jpg',alt:'Фото',caption:'Подпись',button_text:'',button_url:''}
+    const payload={...valid,sections:[section,{...section,id:'text-1',type:'text',text:'Текст'}]}
+    assert.equal((await app.inject({method:'POST',url:'/api/admin/pages',payload})).statusCode,401)
+    assert.equal(calls.length,0)
+    const created=await app.inject({method:'POST',url:'/api/admin/pages',headers:{'x-admin-key':'secret'},payload})
+    assert.equal(created.statusCode,201)
+    assert.deepEqual(created.json().sections,payload.sections)
+    const updated=await app.inject({method:'PUT',url:'/api/admin/pages/7',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[...payload.sections].reverse()}})
+    assert.equal(updated.statusCode,200)
+    assert.equal(updated.json().sections[0].id,'text-1')
+    assert.match(calls[1].sql,/sections=\$5.*WHERE id=\$6/)
+    assert.equal(calls[1].args[5],'7')
+    const rejected=await app.inject({method:'POST',url:'/api/admin/pages',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[{...section,button_url:'javascript:alert(1)'}]}})
+    assert.equal(rejected.statusCode,400);assert.equal(calls.length,2)
+  } finally { await app.close() }
+})

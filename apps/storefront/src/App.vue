@@ -73,7 +73,7 @@ onMounted(async () => {
 
 <template>
   <div class="site-shell">
-    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.8</span></div>
+    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.9</span></div>
     <header class="site-header">
       <div class="container header-inner">
         <a href="/" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>

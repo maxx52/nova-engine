@@ -47,7 +47,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return { status: 'ok', product: 'NOVA Engine', version: '0.8.0', database: 'connected' }
+  return { status: 'ok', product: 'NOVA Engine', version: '0.9.0', database: 'connected' }
 })
 app.get('/api/products', async () => {
   const result = await pool.query('SELECT '+productFields+' FROM products ORDER BY id')
