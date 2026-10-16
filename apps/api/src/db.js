@@ -37,5 +37,6 @@ export async function initDatabase() {
     for(const [name,category,price,description] of seeds)
       await pool.query('INSERT INTO products (name,category,price,description) VALUES ($1,$2,$3,$4)',[name,category,price,description])
   }
+  await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
 }
 export function productJson(row) { return {...row,id:Number(row.id),price:Number(row.price)} }
