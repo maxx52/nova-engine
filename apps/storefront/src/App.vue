@@ -10,6 +10,12 @@ const selectedCategory = ref('Все товары')
 const cartOpen = ref(false)
 const mobileMenu = ref(false)
 const notice = ref('')
+const activeProduct = ref(null)
+const currentImage = ref('')
+const productImages = computed(() => activeProduct.value ? (activeProduct.value.images?.length ? activeProduct.value.images : (activeProduct.value.image_url ? [activeProduct.value.image_url] : [])) : [])
+function openProduct(product) { activeProduct.value = product; currentImage.value = productImages.value[0] || ''; history.pushState({ productId: product.id }, '', '/product/' + product.id); window.scrollTo({top:0,behavior:'smooth'}) }
+function closeProduct() { activeProduct.value = null; history.pushState({}, '', '/'); window.scrollTo({top:0,behavior:'smooth'}) }
+function syncUrl() { const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
 const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
 const art = {
   'Электроника': { icon: '🎧', background: 'linear-gradient(145deg,#e8e8ff,#d4dbfb)' },
@@ -37,10 +43,12 @@ function changeQty(item, delta) {
 }
 function scrollToCatalog() { document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }) }
 onMounted(async () => {
+  window.addEventListener('popstate',syncUrl)
   try {
     const response = await fetch('/api/products')
     if (!response.ok) throw new Error('Не удалось получить товары')
     products.value = (await response.json()).filter(p=>p.published!==false)
+    syncUrl()
   } catch (e) { error.value = e.message }
   finally { loading.value = false }
 })
@@ -48,7 +56,7 @@ onMounted(async () => {
 
 <template>
   <div class="site-shell">
-    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.2</span></div>
+    <div class="announcement"><span>✦ Новая платформа для современной торговли</span><span class="announcement-right">NOVA Engine · Preview 0.5</span></div>
     <header class="site-header">
       <div class="container header-inner">
         <a href="#" class="logo" aria-label="NOVA — главная"><span class="logo-symbol">N</span><span>NOVA<span class="logo-dot">.</span></span><small>ENGINE</small></a>
@@ -64,7 +72,7 @@ onMounted(async () => {
       </div>
     </header>
 
-    <main>
+    <main v-if="!activeProduct">
       <section class="hero-section">
         <div class="container hero-grid">
           <div class="hero-copy">
@@ -96,15 +104,34 @@ onMounted(async () => {
         <p v-if="loading" class="empty-state">Загружаем каталог…</p>
         <div v-else-if="visibleProducts.length" class="product-grid">
           <article v-for="(product, index) in visibleProducts" :key="product.id" class="product-card">
-            <div class="product-image" :style="{ background: art[product.category]?.background || 'linear-gradient(145deg,#e6eaf1,#cfd9e6)' }">
+            <div class="product-image" @click="openProduct(product)" style="cursor:pointer" :style="{ background: art[product.category]?.background || 'linear-gradient(145deg,#e6eaf1,#cfd9e6)' }">
               <span class="product-badge" v-if="index < 2">{{ index === 0 ? 'ХИТ ПРОДАЖ' : 'ВЫБОР NOVA' }}</span><img v-if="product.image_url" :src="product.image_url" :alt="product.name" style="width:100%;height:100%;object-fit:contain;padding:24px"><span v-else class="product-emoji">{{ productIcons[(product.id - 1) % productIcons.length] || '📦' }}</span>
-              <button class="quick-add" :aria-label="'Добавить ' + product.name + ' в корзину'" @click="addToCart(product)">＋</button>
+              <button class="quick-add" @click.stop="addToCart(product)" :aria-label="'Добавить ' + product.name + ' в корзину'" >＋</button>
             </div>
-            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3>{{ product.name }}</h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.stock===0 && product.sku">В корзину ↗</button></div></div>
+            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3><a :href="'/product/'+product.id" @click.prevent="openProduct(product)">{{ product.name }}</a></h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.stock===0 && product.sku">В корзину ↗</button></div></div>
           </article>
         </div>
         <p v-else-if="!error" class="empty-state">По вашему запросу товары не найдены.</p>
       </section>
+    </main>
+    <main v-else class="container" style="padding-top:44px;padding-bottom:90px">
+      <button class="detail-back" @click="closeProduct">← Назад в каталог</button>
+      <div class="detail-layout">
+        <div>
+          <div class="detail-photo"><img v-if="currentImage" :src="currentImage" :alt="activeProduct.name"><span v-else style="font-size:90px">📦</span></div>
+          <div class="detail-thumbnails"><button v-for="url in productImages" :key="url" :class="{ chosen:currentImage===url }" @click="currentImage=url"><img :src="url" :alt="activeProduct.name"></button></div>
+        </div>
+        <div class="detail-info">
+          <span class="section-kicker">{{activeProduct.category}}</span>
+          <h1>{{activeProduct.name}}</h1>
+          <p class="detail-sku">Артикул: {{activeProduct.sku || 'не указан'}}</p>
+          <strong class="detail-price">{{currency(activeProduct.price)}}</strong>
+          <p class="detail-stock">{{activeProduct.stock>0?'● В наличии: '+activeProduct.stock:'Наличие уточняется'}}</p>
+          <button class="primary-button" @click="addToCart(activeProduct)">Добавить в корзину →</button>
+          <h2>Описание товара</h2>
+          <p class="detail-description">{{activeProduct.description || 'Описание пока не добавлено.'}}</p>
+        </div>
+      </div>
     </main>
     <footer class="footer"><div class="container footer-inner"><div class="footer-brand">NOVA<span>.</span> <small>ENGINE</small></div><span>Демонстрация платформы · {{ new Date().getFullYear() }}</span><span>Создано на Vue 3 + JavaScript</span></div></footer>
     <div v-if="cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">ВАШИ ПОКУПКИ</span><h2>Корзина ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><div v-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>В корзине пока пусто</h3><p>Добавьте понравившиеся товары из каталога.</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">К покупкам ↗</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.id" class="cart-item"><span class="cart-item-art">{{ productIcons[(item.id - 1) % productIcons.length] || '📦' }}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length" class="drawer-bottom"><div class="total-row"><span>Итого</span><strong>{{ currency(cartTotal) }}</strong></div><p>Демонстрационная корзина — оформление реальных заказов появится позже.</p><button class="primary-button" disabled>Оформление скоро появится</button></div></aside></div>
