@@ -27,6 +27,7 @@ server {
     location ^~ /api/admin/ { return 404; }
     location = /api/uploads { return 404; }
     location = /api/code-frame { include /srv/nova/deploy/code-frame-proxy.conf; }
+    location = /api/payment-frame { include /srv/nova/deploy/code-frame-proxy.conf; }
     location /api/ {
         limit_except GET HEAD { deny all; }
         limit_req zone=nova_requests burst=30 nodelay;
@@ -56,6 +57,7 @@ server {
     limit_conn nova_connections 20;
     location ~ /\. { return 404; }
     location = /api/code-frame { include /srv/nova/deploy/code-frame-proxy.conf; }
+    location = /api/payment-frame { include /srv/nova/deploy/code-frame-proxy.conf; }
     location /api/ {
         limit_req zone=nova_requests burst=30 nodelay;
         limit_req_status 429;
