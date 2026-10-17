@@ -1,3 +1,4 @@
+import {initThemes} from './themes.js'
 import {initForms} from './forms.js'
 import {initPayments} from './payments.js'
 import {initAnalytics} from './analytics.js'
@@ -93,6 +94,7 @@ export async function initDatabase() {
   await initForms(pool)
   await initAnalytics(pool)
   await initDesign(pool)
+  await initThemes(pool)
   await initMediaSchema(pool)
 }
 export function productJson(row) { return {...row,id:Number(row.id),price:Number(row.price)} }

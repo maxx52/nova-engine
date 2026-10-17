@@ -1,7 +1,8 @@
 <script setup>
-import {safeLink,publicDataPath} from './contentSafety.js'
-import {ref,onMounted,onBeforeUnmount} from 'vue'
-const props=defineProps({code:{type:Object,required:true},data:{type:Object,default:()=>({})},navigation:{type:Boolean,default:false},title:{type:String,default:'Пользовательский блок'}})
+import {validateThemeAction,publicNavigation} from './themes.js'
+import {publicDataPath} from './contentSafety.js'
+import {ref,onMounted,onBeforeUnmount,watch} from 'vue'
+const props=defineProps({code:{type:Object,required:true},data:{type:Object,default:()=>({})},navigation:{type:Boolean,default:false},actions:Function,title:{type:String,default:'Пользовательский блок'}})
 const emit=defineEmits(['error'])
 async function boundedJson(response){
  if(Number(response.headers.get('content-length'))>2000000)throw Error('Слишком большой ответ')
@@ -17,6 +18,18 @@ let scheduled=false,activeRequests=0
 const seenRequests=new Set()
 function message(event){
  if(event.source!==frame.value?.contentWindow||event.origin!=='null'||event.data?.key!==key)return
+ if(event.data.type==='nova:action'){
+  const {id,action,payload}=event.data
+  if(!Number.isInteger(id)||id<1||id>100||seenRequests.has(id))return
+  seenRequests.add(id)
+  const respond=value=>frame.value?.contentWindow?.postMessage({type:'nova:action-result',key,id,...value},'*')
+  if(!props.actions||!props.navigation||!navigator.userActivation?.isActive){respond({error:'Действие недоступно или не подтверждено нажатием'});return}
+  const invalid=validateThemeAction(action,payload);if(invalid){respond({error:invalid});return}
+  if(activeRequests>=3){respond({error:'Слишком много одновременных действий'});return}
+  activeRequests++
+  Promise.resolve().then(()=>props.actions(action,payload)).then(data=>respond({data})).catch(e=>respond({error:e.message||'Действие недоступно'})).finally(()=>activeRequests--)
+  return
+ }
  if(event.data.type==='nova:data'){
   const {id,path}=event.data
   if(!Number.isInteger(id)||id<1||id>100||seenRequests.has(id))return
@@ -31,10 +44,11 @@ function message(event){
   }).catch(()=>respond({error:'Публичные данные недоступны. Повторите запрос позже.'})).finally(()=>activeRequests--)
   return
  }
- if(event.data.type==='nova:navigate'&&props.navigation&&typeof event.data.href==='string'&&event.data.href.startsWith('/')&&safeLink(event.data.href)&&!/^\/(api|admin|uploads)(\/|$)/.test(event.data.href)){location.assign(event.data.href);return}
+ if(event.data.type==='nova:navigate'&&props.navigation&&publicNavigation(event.data.href)){location.assign(event.data.href);return}
  if(event.data.type==='nova:error'&&typeof event.data.message==='string')emit('error',event.data.message.slice(0,500))
  if(event.data.type==='nova:height'&&Number.isFinite(event.data.height)&&!scheduled){scheduled=true;const next=Math.max(120,Math.min(3000,event.data.height));requestAnimationFrame(()=>{height.value=next;scheduled=false})}
 }
+watch(()=>props.data,value=>{if(sent)frame.value?.contentWindow?.postMessage({type:'nova:context',key,data:JSON.parse(JSON.stringify(value))},'*')},{deep:true})
 onMounted(()=>addEventListener('message',message));onBeforeUnmount(()=>removeEventListener('message',message))
 </script>
 <template><iframe ref="frame" src="/api/code-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" :title="title" :style="{height:height+'px'}" class="nova-code-frame" @load="send"></iframe></template>

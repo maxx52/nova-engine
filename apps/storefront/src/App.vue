@@ -1,4 +1,7 @@
 <script setup>
+import ThemeSlot from '../../../shared/ThemeSlot.vue'
+import ContactForm from '../../../shared/ContactForm.vue'
+import {validateThemeAction} from '../../../shared/themes.js'
 import {track} from './analytics.js'
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import CheckoutForm from './CheckoutForm.vue'
@@ -13,7 +16,22 @@ const design=ref(designValue())
 const t=computed(()=>design.value.texts)
 const customHome=computed(()=>design.value.code.enabled&&(design.value.code.placement==='site'||routePath.value==='/'&&design.value.code.placement==='home'))
 const designStyle=computed(()=>({'--nova-primary':design.value.colors.primary,'--nova-accent':design.value.colors.accent,'--nova-background':design.value.colors.background,'--nova-text':design.value.colors.text,'--nova-hero':design.value.colors.hero,'--nova-footer':design.value.colors.footer,'--nova-radius':design.value.radius+'px','--nova-width':design.value.width+'px',fontFamily:design.value.font+', Arial, sans-serif'}))
-const publicData=computed(()=>({settings:siteSettings.value,products:products.value,route:{path:routePath.value,search:location.search}}))
+const publicData=computed(()=>({settings:{...siteSettings.value,menu:menuItems.value},products:products.value,design:{texts:t.value,colors:design.value.colors,font:design.value.font,width:design.value.width,radius:design.value.radius},theme:design.value.theme?{id:design.value.theme.manifest.id,version:design.value.theme.manifest.version,settings:design.value.theme.settings}:null,route:{path:routePath.value,search:/^\/blog/.test(routePath.value)?new URLSearchParams([...new URLSearchParams(location.search)].filter(([k])=>['page','category','tag'].includes(k))).toString():''},context:{product:activeProduct.value},cartSummary:{count:itemCount.value,total_cents:Math.round(cartTotal.value*100)}}))
+const contactFormId=ref('')
+async function themeAction(action,payload){
+ const invalid=validateThemeAction(action,payload);if(invalid)throw Error(invalid)
+ if(action==='forms.open'){contactFormId.value=payload.form_id;return {opened:true}}
+ if(!shopEnabled.value)throw Error('Магазин отключён')
+ if(action==='cart.open'){cartOpen.value=true;return {opened:true}}
+ if(checkoutLocked.value)throw Error(t.value.checkout_locked)
+ const p=products.value.find(p=>p.id===payload.product_id);if(!p)throw Error('Товар недоступен')
+ const v=payload.variant_name?p.variants?.find(v=>v.name===payload.variant_name):null
+ if(payload.variant_name&&!v||p.variants?.length&&!v)throw Error('Укажите доступный вариант товара')
+ const available=Math.min(100,v?.stock??p.stock),current=cart.value.find(x=>x.cartKey===JSON.stringify([p.id,v?.name||'']))?.quantity||0
+ if(available-current<payload.quantity)throw Error('Недостаточно доступного товара')
+ addToCart(p,v,payload.quantity)
+ return {count:itemCount.value,total_cents:Math.round(cartTotal.value*100)}
+}
 const settingsReady=ref(false)
 const settingsError=ref('')
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
@@ -63,7 +81,7 @@ const visibleProducts = computed(() => products.value.filter(p =>
 ))
 const itemCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0))
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0))
-function addToCart(product,variant=null) {
+function addToCart(product,variant=null,quantity=1) {
   if(checkoutLocked.value){notice.value=t.value.checkout_locked;return}
   checkoutOpen.value=false
   const choice=variant || (product.variants?.length ? product.variants.find(v=>v.stock>0) : null)
@@ -72,8 +90,8 @@ function addToCart(product,variant=null) {
   if(!choice && product.stock<=0){notice.value=t.value.out_of_stock;return}
   const key=JSON.stringify([product.id,choice?.name||''])
   const existing=cart.value.find(item=>item.cartKey===key)
-  if(existing){if(existing.quantity>=Math.min(100,choice?.stock??product.stock)){notice.value=t.value.stock_limit;return}existing.quantity+=1}
-  else cart.value.push({...product,cartKey:key,variantName:choice?.name||'',available:choice?.stock??product.stock,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:1})
+  if(existing){if(existing.quantity>=Math.min(100,choice?.stock??product.stock)){notice.value=t.value.stock_limit;return}existing.quantity=Math.min(Math.min(100,choice?.stock??product.stock),existing.quantity+quantity)}
+  else cart.value.push({...product,cartKey:key,variantName:choice?.name||'',available:choice?.stock??product.stock,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:Math.min(quantity,100,choice?.stock??product.stock)})
 
   track('cart_add',routePath.value)
   notice.value = t.value.added
@@ -115,7 +133,7 @@ onMounted(async () => {
   <div v-if="!settingsReady" class="empty-state" role="status">{{settingsError || t.loading}}</div>
   <div v-else class="site-shell" :style="designStyle">
     <div v-if="design.visibility.announcement" class="announcement"><span>{{t.announcement || siteSettings.name}}</span></div>
-    <header v-if="design.visibility.header" class="site-header">
+    <ThemeSlot v-if="design.visibility.header" name="header" :design="design" :data="publicData" :actions="themeAction"><header class="site-header">
       <div class="container header-inner">
         <a href="/" class="logo" :aria-label="siteSettings.name+' — главная'"><img v-if="siteSettings.logo_url" :src="siteSettings.logo_url" :alt="siteSettings.name" class="site-logo-image"><span v-else class="logo-symbol">{{siteSettings.name.slice(0,1)}}</span><span class="site-name">{{siteSettings.name}}</span></a>
         <nav class="main-nav" :class="{ 'nav-open': mobileMenu }" aria-label="Основная навигация">
@@ -126,14 +144,15 @@ onMounted(async () => {
           <button v-if="shopEnabled" class="cart-trigger" :aria-label="t.cart+' '+itemCount" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">{{t.cart}}</span><span class="cart-count">{{ itemCount }}</span></button>
         </div>
       </div>
-    </header>
+    </header></ThemeSlot>
 
     <main v-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
-    <BlogView v-else-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" :texts="t" />
+    <BlogView :design="design" :site-data="publicData" :actions="themeAction" v-else-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" :texts="t" />
     <main v-else-if="isBlogRoute" class="container site-welcome"><h1>{{t.not_found}}</h1><a href="/">{{t.home_link}}</a></main>
-    <ContentPage v-else-if="isContentRoute" :site-data="publicData" :path="contentPath" :site-name="siteSettings.name" :texts="t" />
+    <ContentPage :template-name="routePath==='/'?'home':'page'" :design="design" :actions="themeAction" v-else-if="isContentRoute" :site-data="publicData" :path="contentPath" :site-name="siteSettings.name" :texts="t" />
+    <ThemeSlot v-else-if="routePath==='/'&&design.theme?.templates.home" name="home" :design="design" :data="publicData" :actions="themeAction"><main class="container site-welcome"><h1>{{siteSettings.name}}</h1><a href="/catalog">{{t.hero_button}}</a></main></ThemeSlot>
     <main v-else-if="!shopEnabled" class="container site-welcome"><h1>{{routePath==='/'?siteSettings.name:t.not_found}}</h1><a v-if="routePath!=='/'" href="/">{{t.home_link}}</a></main>
-    <main v-else-if="!activeProduct">
+    <ThemeSlot v-else-if="!activeProduct" :key="routePath" name="catalog" :design="design" :data="publicData" :actions="themeAction"><main>
       <template v-for="sectionId in design.home_order" :key="sectionId">
       <section v-if="sectionId==='hero' && design.visibility.hero" class="hero-section">
         <div class="container hero-grid">
@@ -176,7 +195,7 @@ onMounted(async () => {
       </section>
       </template>
     </main>
-    <main v-else class="container" style="padding-top:44px;padding-bottom:90px">
+    </ThemeSlot><ThemeSlot v-else name="product" :design="design" :data="publicData" :actions="themeAction"><main class="container" style="padding-top:44px;padding-bottom:90px">
       <button class="detail-back" @click="closeProduct">{{t.back_catalog}}</button>
       <div class="detail-layout">
         <div>
@@ -195,14 +214,16 @@ onMounted(async () => {
         </div>
       </div>
     </main>
-    <CodeFrame v-if="design.code.enabled && design.code.placement==='footer'" :key="routePath" :code="design.code" :data="publicData" navigation />
-    <footer v-if="design.visibility.footer" class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>{{t.footer_text}}<template v-if="design.visibility.year"> · {{ new Date().getFullYear() }}</template></span><span>{{t.footer_credit}}</span></div></footer>
+    </ThemeSlot><CodeFrame v-if="design.code.enabled && design.code.placement==='footer'" :key="routePath" :code="design.code" :data="publicData" navigation />
+    <ThemeSlot v-if="design.visibility.footer" name="footer" :design="design" :data="publicData" :actions="themeAction"><footer class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>{{t.footer_text}}<template v-if="design.visibility.year"> · {{ new Date().getFullYear() }}</template></span><span>{{t.footer_credit}}</span></div></footer></ThemeSlot>
     <div v-if="shopEnabled" v-show="cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">{{t.cart_kicker}}</span><h2>{{t.cart}} ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><CheckoutForm v-if="checkoutOpen" :items="cart" :texts="t" @locked="checkoutLocked=$event" @complete="orderComplete" @back="checkoutOpen=false; cartOpen=false"/><div v-else-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>{{t.cart_empty}}</h3><p>{{t.cart_hint}}</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">{{t.cart_shop}}</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.cartKey" class="cart-item"><span class="cart-item-art">{{t.fallback_icon}}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length && !checkoutOpen" class="drawer-bottom"><div class="total-row"><span>{{t.cart_total}}</span><strong>{{ currency(cartTotal) }}</strong></div><p>{{t.cart_note}}</p><button class="primary-button" @click="startCheckout">{{t.checkout}}</button></div></aside></div>
+    <div v-if="contactFormId" class="drawer-overlay" @click.self="contactFormId=''"><section class="theme-contact-modal" role="dialog" aria-modal="true" aria-label="Обратная связь"><button class="close-button" aria-label="Закрыть форму" @click="contactFormId=''">×</button><ContactForm :key="contactFormId" :form-id="contactFormId"/></section></div>
     <div v-if="notice" class="toast">{{ notice }} ✓</div>
   </div>
 </template>
 
 <style scoped>
+.theme-contact-modal{width:min(680px,calc(100vw - 32px));max-height:90vh;overflow:auto;background:var(--nova-background);padding:18px;border-radius:var(--nova-radius);margin:auto}.theme-contact-modal>.close-button{display:block;margin:0 0 10px auto}
 .site-logo-image { max-width:100px;max-height:48px;object-fit:contain; }
 .site-name { max-width:260px;overflow-wrap:anywhere;line-height:1.2; }
 .site-welcome { min-height:65vh;padding-top:80px;padding-bottom:80px;overflow-wrap:anywhere; }

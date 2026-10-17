@@ -1,0 +1,11 @@
+{
+  "format": "nova-theme",
+  "apiVersion": 1,
+  "manifest": {"id":"nova-studio","name":"NOVA Studio","version":"1.0.0","description":"Пример переносимой темы: главная, каталог, товар и вступление страницы. Корзина и формы остаются в CMS.","author":"NOVA Engine","license":"MIT"},
+  "settings_schema": [
+    {"id":"eyebrow","label":"Надзаголовок главной","type":"text","default":"СОЗДАНО ДЛЯ ВАС"},
+    {"id":"headline","label":"Заголовок главной","type":"text","default":"Хорошие вещи. Удобный выбор."},
+    {"id":"contact-form","label":"Форма для кнопки связи","type":"form","default":""},
+    {"id":"show-prices","label":"Показывать цены на главной","type":"checkbox","default":true}
+  ]
+}

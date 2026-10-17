@@ -13,7 +13,7 @@ export function registerDesign(app,pool,requireAdmin){
  app.get('/api/admin/design',{preHandler:requireAdmin},async()=>{const row=(await pool.query('SELECT draft,revision::text,updated_at FROM site_design WHERE id=1')).rows[0];return {...row,draft:designValue(row.draft)}})
  app.get('/api/admin/design/versions',{preHandler:requireAdmin},async()=>(await pool.query('SELECT id::text,action,created_at FROM design_versions ORDER BY id DESC LIMIT 30')).rows)
  app.get('/api/admin/design/versions/:id',{preHandler:requireAdmin},async(req,reply)=>{if(!revision(req.params.id))return reply.code(400).send({error:'Неверная версия'});const row=(await pool.query('SELECT payload FROM design_versions WHERE id=$1',[req.params.id])).rows[0];return row?designValue(row.payload):reply.code(404).send({error:'Версия не найдена'})})
- for(const action of ['save','publish'])app.route({method:action==='save'?'PUT':'POST',url:'/api/admin/design'+(action==='save'?'':'/publish'),bodyLimit:512*1024,preHandler:requireAdmin,handler:async(req,reply)=>{
+ for(const action of ['save','publish'])app.route({method:action==='save'?'PUT':'POST',url:'/api/admin/design'+(action==='save'?'':'/publish'),bodyLimit:1152*1024,preHandler:requireAdmin,handler:async(req,reply)=>{
   if(!revision(req.body?.revision))return reply.code(400).send({error:'Укажите текущую версию оформления'})
   if(action==='save'){const error=validateDesign(req.body.draft);if(error)return reply.code(400).send({error})}
   const db=await pool.connect()

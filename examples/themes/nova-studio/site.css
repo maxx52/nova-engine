@@ -1,0 +1,4 @@
+/* Only the outer CMS document. Never use this file for admin styling. */
+.site-shell { background: var(--nova-background); }
+.site-header { border-bottom: 1px solid #dbe1d8; }
+.footer { margin-top: 32px; }

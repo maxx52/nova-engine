@@ -1,4 +1,6 @@
 <script setup>
+import ThemesWorkspace from './ThemesWorkspace.vue'
+
 import FormsWorkspace from './FormsWorkspace.vue'
 import PaymentsWorkspace from './PaymentsWorkspace.vue'
 import AnalyticsWorkspace from './AnalyticsWorkspace.vue'
@@ -41,7 +43,7 @@ const saveError=ref('')
 async function apiWrite(url,method,body){const response=await adminFetch(url,{method,headers:body?{'content-type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
 async function reload(){const r=await adminFetch('/api/products');if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
-const allSections=[{id:'forms',icon:'✉',label:'Формы и заявки'},{id:'payments',icon:'₽',label:'Оплата'},{id:'analytics',icon:'▥',label:'Аналитика'},{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
+const allSections=[{id:'themes',icon:'◈',label:'Темы и шаблоны'},{id:'forms',icon:'✉',label:'Формы и заявки'},{id:'payments',icon:'₽',label:'Оплата'},{id:'analytics',icon:'▥',label:'Аналитика'},{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories(),loadCommerce()]);error.value=''}catch(e){error.value=e.message}}}
 const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
@@ -100,6 +102,7 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
       <PaymentsWorkspace v-if="page==='payments'" :api-write="apiWrite" />
       <AnalyticsWorkspace v-if="page==='analytics'" :api-write="apiWrite" />
       <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" />
+      <ThemesWorkspace v-if="page==='themes'" :api-write="apiWrite" @design="navigate('design')" @pages="navigate('pages')"/>
       <DesignWorkspace v-if="page==='design'" :api-write="apiWrite" @dirty="designDirty=$event" />
       <SiteSettings v-if="page==='settings'" :api-write="apiWrite" @saved="settingsSaved" />
       <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" />

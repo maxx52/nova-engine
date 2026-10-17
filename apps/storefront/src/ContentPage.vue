@@ -1,8 +1,9 @@
 <script setup>
+import ThemeSlot from '../../../shared/ThemeSlot.vue'
 import {defaultTexts} from '../../../shared/siteDesign.js'
 import { ref, watch } from 'vue'
 import PageSections from './PageSections.vue'
-const props = defineProps({ siteData:{type:Object,default:()=>({})}, texts:{type:Object,default:()=>defaultTexts}, path: String, siteName: {type:String,default:'NOVA'} })
+const props = defineProps({ design:Object,actions:Function,templateName:{type:String,default:'page'}, siteData:{type:Object,default:()=>({})}, texts:{type:Object,default:()=>defaultTexts}, path: String, siteName: {type:String,default:'NOVA'} })
 const page = ref(null), loading = ref(false), error = ref('')
 let version = 0
 watch(() => props.path, async path => {
@@ -22,7 +23,7 @@ watch(() => props.path, async path => {
   <main class="container content-page">
     <p v-if="loading" role="status">{{texts.page_loading}}</p>
     <template v-else-if="error"><h1>{{ error }}</h1><a href="/">{{texts.home_link}}</a></template>
-    <article v-else-if="page"><h1>{{ page.title }}</h1><div class="page-text">{{ page.content }}</div><PageSections :sections="page.sections || []" :site-data="siteData" /></article>
+    <article v-else-if="page"><ThemeSlot :name="design?.theme?.templates?.[templateName]?templateName:'page'" :design="design" :actions="actions" :data="{...siteData,context:{...siteData.context,page}}"><h1>{{ page.title }}</h1><div class="page-text">{{ page.content }}</div></ThemeSlot><PageSections :sections="page.sections || []" :site-data="siteData" /></article>
   </main>
 </template>
 <style scoped>

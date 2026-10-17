@@ -1,0 +1,1 @@
+{"format":"nova-template","apiVersion":1,"manifest":{"id":"contact-page","name":"Страница контактов","version":"1.0.0","description":"Заголовок, контактный текст и место для собственной формы обратной связи.","author":"NOVA Engine","license":"MIT"}}

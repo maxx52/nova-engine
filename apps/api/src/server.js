@@ -1,3 +1,4 @@
+import {registerThemes} from './themes.js'
 import {registerForms} from './forms.js'
 import {registerPayments} from './payments.js'
 import {registerAnalytics} from './analytics.js'
@@ -37,6 +38,7 @@ registerUploads(app,pool,requireAdmin,uploadDirectory)
 registerMedia(app,pool,requireAdmin,uploadDirectory)
 registerPages(app, pool, requireAdmin)
 registerDesign(app,pool,requireAdmin)
+registerThemes(app,pool,requireAdmin)
 registerCodeFrame(app)
 registerSettings(app, pool, requireAdmin)
 registerBlog(app, pool, requireAdmin)
@@ -67,7 +69,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.19.0',database:'connected'}
+  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.20.0',database:'connected'}
 })
 app.get('/api/products', async (request) => {
   const result = await pool.query('SELECT '+productFields+' FROM products'+(await isAdmin(request)?'':' WHERE published=TRUE')+' ORDER BY id')

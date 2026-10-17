@@ -13,7 +13,9 @@
     "dev:api": "npm run dev -w @nova/api",
     "dev:admin": "npm run dev -w @nova/admin",
     "dev:all": "concurrently -k \"npm run dev -w @nova/api\" \"npm run dev -w @nova/storefront\" \"npm run dev -w @nova/admin\"",
-    "test": "node --test"
+    "test": "node --test",
+    "theme:pack": "node scripts/theme-pack.mjs pack",
+    "theme:check": "node scripts/theme-pack.mjs check"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.14",

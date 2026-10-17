@@ -1,0 +1,82 @@
+{
+  "format": "nova-theme",
+  "apiVersion": 1,
+  "manifest": {
+    "id": "nova-studio",
+    "name": "NOVA Studio",
+    "version": "1.0.0",
+    "description": "Пример переносимой темы: главная, каталог, товар и вступление страницы. Корзина и формы остаются в CMS.",
+    "author": "NOVA Engine",
+    "license": "MIT"
+  },
+  "settings_schema": [
+    {
+      "id": "eyebrow",
+      "label": "Надзаголовок главной",
+      "type": "text",
+      "default": "СОЗДАНО ДЛЯ ВАС"
+    },
+    {
+      "id": "headline",
+      "label": "Заголовок главной",
+      "type": "text",
+      "default": "Хорошие вещи. Удобный выбор."
+    },
+    {
+      "id": "contact-form",
+      "label": "Форма для кнопки связи",
+      "type": "form",
+      "default": ""
+    },
+    {
+      "id": "show-prices",
+      "label": "Показывать цены на главной",
+      "type": "checkbox",
+      "default": true
+    }
+  ],
+  "style": {
+    "colors": {
+      "primary": "#264e46",
+      "accent": "#c07542",
+      "background": "#fbfaf6",
+      "text": "#18322c",
+      "hero": "#eeeee4",
+      "footer": "#18322c"
+    },
+    "font": "Arial",
+    "radius": 14,
+    "width": 1220,
+    "visibility": {
+      "announcement": false
+    },
+    "home_order": [
+      "hero",
+      "advantages",
+      "catalog"
+    ],
+    "site_css": "/* Only the outer CMS document. Never use this file for admin styling. */\n.site-shell { background: var(--nova-background); }\n.site-header { border-bottom: 1px solid #dbe1d8; }\n.footer { margin-top: 32px; }\n"
+  },
+  "templates": {
+    "home": {
+      "html": "<main class=\"wrap\"><section class=\"welcome\"><p id=\"eyebrow\" class=\"eyebrow\"></p><h1 id=\"headline\"></h1><p id=\"intro\" class=\"muted\"></p><div class=\"actions\"><a class=\"button\" href=\"/catalog\" id=\"catalog-link\">Открыть каталог</a><button id=\"contact\" hidden>Связаться с нами</button></div></section><section id=\"selection\"><h2>Выбор сегодня</h2><div id=\"products\" class=\"grid\"></div></section><p id=\"status\" class=\"status\" role=\"status\"></p></main>\n",
+      "css": "[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;color:var(--nova-text,#18322c);background:var(--nova-background,#fbfaf6);font:16px/1.6 Arial,sans-serif}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(30px,6vw,60px);line-height:1.1;letter-spacing:-.04em}h2{font-size:clamp(24px,4vw,36px);line-height:1.2}a{color:inherit}button,.button{font:inherit;border:0;border-radius:var(--nova-radius,14px);padding:12px 19px;cursor:pointer;background:var(--nova-primary,#264e46);color:white;text-decoration:none;display:inline-block}button:disabled{opacity:.45;cursor:default}.wrap{width:min(var(--nova-width,1220px),100%);padding:32px 22px;margin:auto}.muted{color:#66766b}.eyebrow{color:var(--nova-accent,#c07542);font-size:12px;font-weight:700;letter-spacing:.15em}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.card{padding:22px;border:1px solid #dbe1d8;border-radius:var(--nova-radius,14px);background:white;min-width:0}.card h3{font-size:20px;line-height:1.3;margin:15px 0}.photo{width:100%;height:190px;object-fit:contain;background:var(--nova-hero,#eeeee4);border-radius:10px}.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.status{min-height:26px;margin:18px 0 0;color:#476354;overflow-wrap:anywhere}.card p{overflow-wrap:anywhere}select,input{padding:12px;font:inherit;border:1px solid #bfcfc4;border-radius:10px;max-width:100%}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:540px){.grid{grid-template-columns:1fr}.wrap{padding:26px 16px}}\n\n.welcome{padding:clamp(28px,7vw,76px);background:var(--nova-hero);border-radius:20px;margin-bottom:38px}.welcome h1{max-width:760px}.welcome p{max-width:650px}.welcome .actions{margin-top:24px}\n",
+      "js": "// Use textContent for CMS data. Do not interpolate visitor content as HTML.\nfunction render(){\n const settings=NOVA.theme.settings;\n document.getElementById('eyebrow').textContent=settings.eyebrow;\n document.getElementById('headline').textContent=settings.headline;\n document.getElementById('intro').textContent=NOVA.context.page?.content||NOVA.design.texts.hero_description;\n document.getElementById('catalog-link').hidden=!NOVA.settings.shop_enabled;\n document.getElementById('selection').hidden=!NOVA.settings.shop_enabled;\n document.getElementById('contact').hidden=!settings['contact-form'];\n const root=document.getElementById('products');root.replaceChildren();\n for(const p of NOVA.products.slice(0,3)){\n  const card=document.createElement('article');card.className='card';\n  const a=document.createElement('a');a.href='/product/'+p.id;\n  const title=document.createElement('h3');title.textContent=p.name;\n  if(p.image_url){const img=document.createElement('img');img.className='photo';img.src=p.image_url;img.alt=p.name;img.loading='lazy';a.append(img)}\n  a.append(title);card.append(a);\n  if(settings['show-prices']){const price=document.createElement('strong');price.textContent=NOVA.money(Math.round(p.price*100));card.append(price)}\n  root.append(card);\n }\n}\ndocument.getElementById('contact').addEventListener('click',()=>NOVA.forms.open(NOVA.theme.settings['contact-form']).catch(e=>document.getElementById('status').textContent=e.message));\nrender();addEventListener('nova:context',render);\n"
+    },
+    "catalog": {
+      "html": "<main class=\"wrap\"><p class=\"eyebrow\">КОЛЛЕКЦИЯ NOVA</p><h1 id=\"title\">Каталог</h1><div class=\"actions\"><label>Поиск <input id=\"search\" type=\"search\" placeholder=\"Название товара\"></label><button id=\"cart\">Открыть корзину</button></div><p class=\"status\" id=\"status\" role=\"status\"></p><div class=\"grid\" id=\"products\"></div></main>\n",
+      "css": "[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;color:var(--nova-text,#18322c);background:var(--nova-background,#fbfaf6);font:16px/1.6 Arial,sans-serif}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(30px,6vw,60px);line-height:1.1;letter-spacing:-.04em}h2{font-size:clamp(24px,4vw,36px);line-height:1.2}a{color:inherit}button,.button{font:inherit;border:0;border-radius:var(--nova-radius,14px);padding:12px 19px;cursor:pointer;background:var(--nova-primary,#264e46);color:white;text-decoration:none;display:inline-block}button:disabled{opacity:.45;cursor:default}.wrap{width:min(var(--nova-width,1220px),100%);padding:32px 22px;margin:auto}.muted{color:#66766b}.eyebrow{color:var(--nova-accent,#c07542);font-size:12px;font-weight:700;letter-spacing:.15em}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.card{padding:22px;border:1px solid #dbe1d8;border-radius:var(--nova-radius,14px);background:white;min-width:0}.card h3{font-size:20px;line-height:1.3;margin:15px 0}.photo{width:100%;height:190px;object-fit:contain;background:var(--nova-hero,#eeeee4);border-radius:10px}.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.status{min-height:26px;margin:18px 0 0;color:#476354;overflow-wrap:anywhere}.card p{overflow-wrap:anywhere}select,input{padding:12px;font:inherit;border:1px solid #bfcfc4;border-radius:10px;max-width:100%}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:540px){.grid{grid-template-columns:1fr}.wrap{padding:26px 16px}}\n\n.card .actions{margin-top:18px}.actions{margin-bottom:20px}h1{margin-bottom:26px}\n",
+      "js": "function render(){\n const query=document.getElementById('search').value.trim().toLowerCase(),root=document.getElementById('products');root.replaceChildren();\n for(const p of NOVA.products.filter(p=>p.name.toLowerCase().includes(query))){\n  const card=document.createElement('article');card.className='card';\n  const a=document.createElement('a');a.href='/product/'+p.id;\n  if(p.image_url){const img=document.createElement('img');img.className='photo';img.src=p.image_url;img.alt=p.name;img.loading='lazy';a.append(img)}\n  const h=document.createElement('h3');h.textContent=p.name;a.append(h);card.append(a);\n  const price=document.createElement('strong');price.textContent=NOVA.money(Math.round(p.price*100));card.append(price);\n  const actions=document.createElement('div');actions.className='actions';\n  const button=document.createElement('button');button.textContent=p.variants.length?'Выбрать вариант':'В корзину';button.disabled=!p.variants.length&&p.stock===0;\n  if(p.variants.length){const link=document.createElement('a');link.href='/product/'+p.id;link.className='button';link.textContent='Выбрать вариант';actions.append(link)}\n  else{button.addEventListener('click',async()=>{try{await NOVA.cart.add(p.id);document.getElementById('status').textContent='Товар добавлен'}catch(e){document.getElementById('status').textContent=e.message}});actions.append(button)}\n  card.append(actions);root.append(card);\n }\n if(!root.children.length)root.textContent=NOVA.design.texts.no_products;\n}\ndocument.getElementById('search').addEventListener('input',render);\ndocument.getElementById('cart').addEventListener('click',()=>NOVA.cart.open().catch(e=>document.getElementById('status').textContent=e.message));\nrender();addEventListener('nova:context',render);\n"
+    },
+    "product": {
+      "html": "<main class=\"wrap\"><a href=\"/catalog\">← Назад в каталог</a><div class=\"product\"><div id=\"photo\"></div><div><p id=\"category\" class=\"eyebrow\"></p><h1 id=\"name\"></h1><p id=\"description\"></p><label id=\"variant-label\" hidden>Вариант товара <select id=\"variant\" aria-label=\"Вариант товара\"></select></label><p><strong id=\"price\"></strong></p><p id=\"stock\"></p><div class=\"actions\"><button id=\"add\">В корзину</button><button id=\"cart\">Корзина</button></div><p id=\"status\" class=\"status\" role=\"status\"></p></div></div></main>\n",
+      "css": "[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;color:var(--nova-text,#18322c);background:var(--nova-background,#fbfaf6);font:16px/1.6 Arial,sans-serif}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(30px,6vw,60px);line-height:1.1;letter-spacing:-.04em}h2{font-size:clamp(24px,4vw,36px);line-height:1.2}a{color:inherit}button,.button{font:inherit;border:0;border-radius:var(--nova-radius,14px);padding:12px 19px;cursor:pointer;background:var(--nova-primary,#264e46);color:white;text-decoration:none;display:inline-block}button:disabled{opacity:.45;cursor:default}.wrap{width:min(var(--nova-width,1220px),100%);padding:32px 22px;margin:auto}.muted{color:#66766b}.eyebrow{color:var(--nova-accent,#c07542);font-size:12px;font-weight:700;letter-spacing:.15em}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.card{padding:22px;border:1px solid #dbe1d8;border-radius:var(--nova-radius,14px);background:white;min-width:0}.card h3{font-size:20px;line-height:1.3;margin:15px 0}.photo{width:100%;height:190px;object-fit:contain;background:var(--nova-hero,#eeeee4);border-radius:10px}.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.status{min-height:26px;margin:18px 0 0;color:#476354;overflow-wrap:anywhere}.card p{overflow-wrap:anywhere}select,input{padding:12px;font:inherit;border:1px solid #bfcfc4;border-radius:10px;max-width:100%}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:540px){.grid{grid-template-columns:1fr}.wrap{padding:26px 16px}}\n\n.product{display:grid;grid-template-columns:1fr 1fr;gap:38px;margin-top:30px}.product .photo{height:360px}.product h1{font-size:clamp(28px,5vw,46px)}#description{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:650px){.product{grid-template-columns:1fr}}\n",
+      "js": "let productId;\nfunction render(){\n const p=NOVA.context.product;if(!p)return;\n if(productId!==p.id){productId=p.id;\n  for(const [id,value]of Object.entries({name:p.name,description:p.description,category:p.category}))document.getElementById(id).textContent=value;\n  const photo=document.getElementById('photo');photo.replaceChildren();if(p.image_url){const img=document.createElement('img');img.src=p.image_url;img.alt=p.name;img.className='photo';photo.append(img)}\n  const picker=document.getElementById('variant');picker.replaceChildren();for(const v of p.variants){const option=document.createElement('option');option.value=v.name;option.textContent=v.name;option.disabled=v.stock<=0;picker.append(option)}\n  document.getElementById('variant-label').hidden=!p.variants.length;\n }\n const v=p.variants.find(v=>v.name===document.getElementById('variant').value),source=v||p;\n document.getElementById('price').textContent=NOVA.money(Math.round(source.price*100));document.getElementById('stock').textContent='В наличии: '+source.stock;document.getElementById('add').disabled=source.stock<=0;\n}\ndocument.getElementById('variant').addEventListener('change',render);\ndocument.getElementById('add').addEventListener('click',async()=>{try{const p=NOVA.context.product;await NOVA.cart.add(p.id,p.variants.length?document.getElementById('variant').value:'');document.getElementById('status').textContent='Товар добавлен'}catch(e){document.getElementById('status').textContent=e.message}});\ndocument.getElementById('cart').addEventListener('click',()=>NOVA.cart.open().catch(e=>document.getElementById('status').textContent=e.message));\nrender();addEventListener('nova:context',render);\n"
+    },
+    "page": {
+      "html": "<div class=\"wrap intro\"><p class=\"eyebrow\" id=\"site\"></p><h1 id=\"title\"></h1><p id=\"content\"></p></div>\n",
+      "css": "[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;color:var(--nova-text,#18322c);background:var(--nova-background,#fbfaf6);font:16px/1.6 Arial,sans-serif}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(30px,6vw,60px);line-height:1.1;letter-spacing:-.04em}h2{font-size:clamp(24px,4vw,36px);line-height:1.2}a{color:inherit}button,.button{font:inherit;border:0;border-radius:var(--nova-radius,14px);padding:12px 19px;cursor:pointer;background:var(--nova-primary,#264e46);color:white;text-decoration:none;display:inline-block}button:disabled{opacity:.45;cursor:default}.wrap{width:min(var(--nova-width,1220px),100%);padding:32px 22px;margin:auto}.muted{color:#66766b}.eyebrow{color:var(--nova-accent,#c07542);font-size:12px;font-weight:700;letter-spacing:.15em}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.card{padding:22px;border:1px solid #dbe1d8;border-radius:var(--nova-radius,14px);background:white;min-width:0}.card h3{font-size:20px;line-height:1.3;margin:15px 0}.photo{width:100%;height:190px;object-fit:contain;background:var(--nova-hero,#eeeee4);border-radius:10px}.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.status{min-height:26px;margin:18px 0 0;color:#476354;overflow-wrap:anywhere}.card p{overflow-wrap:anywhere}select,input{padding:12px;font:inherit;border:1px solid #bfcfc4;border-radius:10px;max-width:100%}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:540px){.grid{grid-template-columns:1fr}.wrap{padding:26px 16px}}\n\n.wrap{padding:12px 0 24px}#content{white-space:pre-wrap;overflow-wrap:anywhere}\n",
+      "js": "function render(){document.getElementById('site').textContent=NOVA.settings.name;document.getElementById('title').textContent=NOVA.context.page.title;document.getElementById('content').textContent=NOVA.context.page.content}\nrender();addEventListener('nova:context',render);\n"
+    }
+  }
+}
