@@ -1,4 +1,5 @@
 <script setup>
+import {analyticsOrderContext} from './analytics.js'
 import {ref,computed,watch} from 'vue'
 const props=defineProps({items:Array,texts:Object})
 const emit=defineEmits(['complete','back','locked'])
@@ -9,7 +10,7 @@ const estimate=computed(()=>Math.round(props.items.reduce((sum,x)=>sum+Math.roun
 async function submit(){
  if(busy.value||receipt.value)return
  busy.value=true;error.value=''
- if(!pending.value)pending.value={request_id:crypto.randomUUID(),customer:{name:form.value.name,phone:form.value.phone,email:form.value.email},delivery:{method:form.value.method,address:form.value.address},comment:form.value.comment,items:props.items.map(x=>({product_id:x.id,variant_name:x.variantName||'',quantity:x.quantity}))}
+ if(!pending.value)pending.value={analytics:await analyticsOrderContext(),request_id:crypto.randomUUID(),customer:{name:form.value.name,phone:form.value.phone,email:form.value.email},delivery:{method:form.value.method,address:form.value.address},comment:form.value.comment,items:props.items.map(x=>({product_id:x.id,variant_name:x.variantName||'',quantity:x.quantity}))}
  try{
   const response=await fetch('/api/orders',{method:'POST',credentials:'omit',headers:{'content-type':'application/json','x-nova-checkout':'1'},body:JSON.stringify(pending.value),signal:AbortSignal.timeout(15000)})
   const data=await response.json()

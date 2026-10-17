@@ -1,4 +1,5 @@
 <script setup>
+import AnalyticsWorkspace from './AnalyticsWorkspace.vue'
 import CommerceWorkspace from './CommerceWorkspace.vue'
 import DesignWorkspace from './DesignWorkspace.vue'
 import MediaPicker from './MediaPicker.vue'
@@ -38,7 +39,7 @@ const saveError=ref('')
 async function apiWrite(url,method,body){const response=await adminFetch(url,{method,headers:body?{'content-type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
 async function reload(){const r=await adminFetch('/api/products');if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
-const allSections=[{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
+const allSections=[{id:'analytics',icon:'▥',label:'Аналитика'},{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories(),loadCommerce()]);error.value=''}catch(e){error.value=e.message}}}
 const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
@@ -87,12 +88,13 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.16 <small>Управление сайтом</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.17 <small>Управление сайтом</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Панель управления</span><AccountActions /><div class="avatar">A</div></div></header>
     <main class="content">
       <div v-if="page==='media'"><div class="page-title"><div><h1>Медиатека</h1><p>Изображения сайта</p></div></div><MediaLibrary /></div>
+      <AnalyticsWorkspace v-if="page==='analytics'" :api-write="apiWrite" />
       <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" />
       <DesignWorkspace v-if="page==='design'" :api-write="apiWrite" @dirty="designDirty=$event" />
       <SiteSettings v-if="page==='settings'" :api-write="apiWrite" @saved="settingsSaved" />
