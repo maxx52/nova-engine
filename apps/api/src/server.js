@@ -1,3 +1,4 @@
+import {registerPayments} from './payments.js'
 import {registerAnalytics} from './analytics.js'
 import {registerCommerce} from './commerce.js'
 import {registerDesign} from './design.js'
@@ -41,7 +42,8 @@ registerBlog(app, pool, requireAdmin)
 registerShopGuard(app,pool,isAdmin)
 const publicOrigins=[...security.origins,...(security.production?[]:['http://localhost:5173','http://127.0.0.1:5173'])]
 const analytics=registerAnalytics(app,pool,requireAdmin,isAdmin,{secret:adminKey,origins:publicOrigins})
-registerCommerce(app,pool,requireAdmin,{origins:publicOrigins,attribute:analytics.attribute})
+const payments=registerPayments(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins})
+registerCommerce(app,pool,requireAdmin,{origins:publicOrigins,attribute:analytics.attribute,receipt:payments.receipt})
 
 function validateProduct(body) {
   if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 150) return 'Название: от 1 до 150 символов'
@@ -63,7 +65,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.17.0',database:'connected'}
+  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.18.0',database:'connected'}
 })
 app.get('/api/products', async (request) => {
   const result = await pool.query('SELECT '+productFields+' FROM products'+(await isAdmin(request)?'':' WHERE published=TRUE')+' ORDER BY id')
