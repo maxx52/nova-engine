@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
+import {publicDataPath} from '../../../shared/contentSafety.js'
 import {designValue,validateDesign} from '../../../shared/siteDesign.js'
 import {registerDesign} from '../src/design.js'
 import {registerCodeFrame} from '../src/codeFrame.js'
@@ -28,4 +29,9 @@ test('code execution is confined to a nonce-authorized opaque iframe without net
  assert.notEqual(policy,second.headers['content-security-policy'])
  const nonce=policy.match(/'nonce-([^']+)'/)[1];assert.ok(first.body.includes('nonce="'+nonce+'"'));assert.match(first.body,/event.source!==parent/);assert.match(first.body,/event.origin!==expectedOrigin/)
  await app.close()
+})
+
+test('sandbox bridge only accepts public read paths and rejects auth, admin and encoded traversal',()=>{
+ for(const path of ['/api/products','/api/products/12','/api/categories','/api/pages/about','/api/blog?page=2&tag=test'])assert.equal(publicDataPath(path),true,path)
+ for(const path of ['/api/admin/products','/api/auth/me','https://evil.invalid/api/products','//evil.invalid/api/pages','/api/blog/../../admin','/api/%61dmin/settings','/api/products%2f..%2fauth/me','/api/pages/a/b'])assert.equal(publicDataPath(path),false,path)
 })

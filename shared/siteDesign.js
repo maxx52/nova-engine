@@ -39,7 +39,7 @@ export function validateDesign(value){
  if(typeof value.hero_button_url!=='string'||!safeLink(value.hero_button_url))return 'Некорректный адрес главной кнопки'
  if(typeof value.hero_image_url!=='string'||value.hero_image_url!==''&&!mediaUrl(value.hero_image_url))return 'Выберите изображение из медиатеки'
  if(!Array.isArray(value.home_order)||value.home_order.length!==3||new Set(value.home_order).size!==3||value.home_order.some(v=>!defaultDesign.home_order.includes(v)))return 'Некорректный порядок разделов'
- if(typeof value.code.enabled!=='boolean'||!['home','footer'].includes(value.code.placement))return 'Некорректное размещение кода'
+ if(typeof value.code.enabled!=='boolean'||!['home','footer','site'].includes(value.code.placement))return 'Некорректное размещение кода'
  for(const key of ['html','css','js','global_css'])if(typeof value.code[key]!=='string'||value.code[key].length>100000)return 'До 100 000 символов в файле: '+key
  if(JSON.stringify(value).length>450000)return 'Оформление слишком большое'
  return null

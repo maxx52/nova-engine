@@ -1,15 +1,18 @@
 import {randomBytes} from 'node:crypto'
 export function codeFramePolicy(nonce){return "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts"}
 export function codeFrameDocument(nonce){
- const runtime = `const expectedOrigin=new URL(location.href).origin;let rendered=false,key='';
+ const runtime = `const expectedOrigin=new URL(location.href).origin;let rendered=false,key='',nextRequest=0;const requests=new Map();
  const report=()=>parent.postMessage({type:'nova:height',key,height:Math.ceil(document.documentElement.scrollHeight)},expectedOrigin);
  addEventListener('error',event=>parent.postMessage({type:'nova:error',key,message:String(event.message).slice(0,500)},expectedOrigin));
  addEventListener('unhandledrejection',event=>parent.postMessage({type:'nova:error',key,message:String(event.reason?.message||event.reason).slice(0,500)},expectedOrigin));
  addEventListener('message',event=>{
   const value=event.data;
-  if(rendered||event.source!==parent||event.origin!==expectedOrigin||!value||value.type!=='nova:render'||typeof value.key!=='string')return;
+  if(event.source!==parent||event.origin!==expectedOrigin||!value)return;
+  if(value.type==='nova:data-result'&&value.key===key&&requests.has(value.id)){const pending=requests.get(value.id);requests.delete(value.id);clearTimeout(pending.timer);value.error?pending.reject(Error(value.error)):pending.resolve(value.data);return;}
+  if(rendered||value.type!=='nova:render'||typeof value.key!=='string')return;
   if(['html','css','js'].some(k=>typeof value[k]!=='string'||value[k].length>100000))return;
   rendered=true;key=value.key;window.NOVA=value.data||{};
+  NOVA.request=path=>new Promise((resolve,reject)=>{const id=++nextRequest;if(id>100){reject(Error('Лимит запросов блока исчерпан'));return;}const timer=setTimeout(()=>{requests.delete(id);reject(Error('Истекло время ожидания данных'))},10000);requests.set(id,{resolve,reject,timer});parent.postMessage({type:'nova:data',key,id,path},expectedOrigin)});
   document.getElementById('root').innerHTML=value.html;
   const style=document.createElement('style');style.textContent=value.css;document.head.append(style);
   document.addEventListener('click',event=>{const a=event.target.closest?.('a[href]');if(!a||!event.isTrusted)return;const raw=a.getAttribute('href');if(raw.startsWith('#'))return;event.preventDefault();try{const url=new URL(raw,location.href);if(url.origin===expectedOrigin)parent.postMessage({type:'nova:navigate',key,href:url.pathname+url.search+url.hash},expectedOrigin)}catch{}});
