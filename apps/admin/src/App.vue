@@ -41,7 +41,7 @@ const categories=computed(()=>categoryRows.value.map(c=>c.name))
 const allSections=[{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories(),loadCommerce()]);error.value=''}catch(e){error.value=e.message}}}
 const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
-const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(n)
+const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
 async function loadCategories(){const r=await adminFetch('/api/categories');if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
 function navigate(id){if(page.value==='design'&&id!=='design'&&designDirty.value&&!confirm('В оформлении есть несохранённые изменения. Перейти без сохранения?'))return;designDirty.value=false;page.value=id;sidebar.value=false;if(id==='overview'&&shopEnabled.value)commerceChanged()}
