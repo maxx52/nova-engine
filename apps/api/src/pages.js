@@ -1,3 +1,4 @@
+import {formId} from '../../../shared/forms.js'
 const imagePattern = /^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/
 export {safeLink} from '../../../shared/contentSafety.js'
 import {safeLink} from '../../../shared/contentSafety.js'
@@ -7,6 +8,7 @@ export function validateSections(sections) {
   for (const section of sections) {
     if (!section || typeof section.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(section.id) || ids.has(section.id)) return 'Некорректный идентификатор секции'
     ids.add(section.id)
+    if(section.type==='form'){if(!formId(section.form_id))return 'Выберите форму обратной связи';continue}
     if(section.type==='code'){
       if(!section.code||typeof section.code!=='object'||['html','css','js'].some(key=>typeof section.code[key]!=='string'||section.code[key].length>100000))return 'Код секции: HTML, CSS и JavaScript до 100 000 символов каждый'
       continue

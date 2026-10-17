@@ -1,3 +1,4 @@
+import {initForms} from './forms.js'
 import {initPayments} from './payments.js'
 import {initAnalytics} from './analytics.js'
 import {initCommerce} from './commerce.js'
@@ -89,6 +90,7 @@ export async function initDatabase() {
   await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
   await initCommerce(pool)
   await initPayments(pool)
+  await initForms(pool)
   await initAnalytics(pool)
   await initDesign(pool)
   await initMediaSchema(pool)

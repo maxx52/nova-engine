@@ -1,4 +1,5 @@
 <script setup>
+import ContactForm from '../../../shared/ContactForm.vue'
 import CodeFrame from '../../../shared/CodeFrame.vue'
 defineProps({ siteData:{type:Object,default:()=>({})}, sections: { type: Array, default: () => [] } })
 import {safeLink,mediaUrl as image} from '../../../shared/contentSafety.js'
@@ -7,7 +8,8 @@ const link=value=>safeLink(value)?value:''
 <template>
   <div class="page-sections">
     <template v-for="section in sections" :key="section.id">
-      <CodeFrame v-if="section.type==='code'" :code="section.code" :data="siteData" navigation />
+      <ContactForm v-if="section.type==='form'" :form-id="section.form_id"/>
+      <CodeFrame v-else-if="section.type==='code'" :code="section.code" :data="siteData" navigation />
       <section v-else-if="section.type==='hero'" class="page-hero" :style="image(section.image_url) ? {backgroundImage: 'linear-gradient(90deg,rgba(10,30,22,.85),rgba(10,30,22,.55)),url('+image(section.image_url)+')'} : {}">
         <h2 v-if="section.title">{{ section.title }}</h2><p v-if="section.text">{{ section.text }}</p><a v-if="section.button_text && link(section.button_url)" :href="link(section.button_url)" class="section-button">{{ section.button_text }} →</a>
       </section>
