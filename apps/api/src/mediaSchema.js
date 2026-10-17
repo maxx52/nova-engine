@@ -25,6 +25,10 @@ export async function initMediaSchema(source){
    FOR path IN SELECT jsonb_array_elements_text(NEW.images) LOOP PERFORM nova_media_check(path); END LOOP;
   ELSIF TG_TABLE_NAME='pages' THEN
    FOR item IN SELECT jsonb_array_elements(NEW.sections) LOOP PERFORM nova_media_check(item->>'image_url'); PERFORM nova_media_check(item->>'button_url'); END LOOP;
+   FOR path IN SELECT (regexp_matches(NEW.sections::text,'(/uploads/[a-f0-9-]{36}\\.(?:png|jpg|webp))','g'))[1] LOOP PERFORM nova_media_check(path); END LOOP;
+  ELSIF TG_TABLE_NAME='site_design' THEN
+   PERFORM nova_media_check(NEW.draft->>'hero_image_url'); PERFORM nova_media_check(NEW.published->>'hero_image_url');
+   FOR path IN SELECT (regexp_matches((NEW.draft::text || NEW.published::text),'(/uploads/[a-f0-9-]{36}\\.(?:png|jpg|webp))','g'))[1] LOOP PERFORM nova_media_check(path); END LOOP;
   ELSIF TG_TABLE_NAME='posts' THEN PERFORM nova_media_check(NEW.cover_url);
   ELSIF TG_TABLE_NAME='site_settings' THEN
    PERFORM nova_media_check(NEW.logo_url);
@@ -32,7 +36,7 @@ export async function initMediaSchema(source){
   END IF;
   RETURN NEW;
  END $$`)
- for(const [table,columns]of [['products','image_url,images'],['pages','sections'],['posts','cover_url'],['site_settings','logo_url,menu']]){
+ for(const [table,columns]of [['products','image_url,images'],['pages','sections'],['posts','cover_url'],['site_settings','logo_url,menu'],['site_design','draft,published']]){
   await pool.query(`DROP TRIGGER IF EXISTS nova_media_refs ON ${table}`)
   await pool.query(`CREATE TRIGGER nova_media_refs BEFORE INSERT OR UPDATE OF ${columns} ON ${table} FOR EACH ROW EXECUTE FUNCTION nova_media_references()`)
  }

@@ -28,3 +28,14 @@
 .detail-attributes{margin-top:34px}.detail-attributes>div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #e9eeea;padding:12px 0;font-size:13px}.detail-attributes span{color:#77877c}
 
 .catalog-filter{border:1px solid #e3e9e4;border-radius:7px;background:white;padding:10px 12px;font:inherit;font-size:12px;max-width:230px;min-height:43px}@media(max-width:620px){.catalog-filter{max-width:none;width:100%}}
+
+/* Editable storefront theme */
+.site-shell{background:var(--nova-background,#fff);color:var(--nova-text,#192426)}
+.site-shell .container{max-width:var(--nova-width,1220px)}
+.site-shell .primary-button,.site-shell .category-tabs button.active,.site-shell .cart-count,.site-shell .logo-symbol{background:var(--nova-primary,#2c6652)}
+.site-shell .hero-copy h1 em,.site-shell .eyebrow,.site-shell .section-kicker,.site-shell .heading-period{color:var(--nova-accent,#4b896e)}
+.site-shell .hero-section{background:var(--nova-hero,#f4f5ee)}
+.site-shell .footer,.site-shell .announcement{background:var(--nova-footer,#1c3530)}
+.site-shell .site-header,.site-shell .product-card,.site-shell .product-info,.site-shell .cart-drawer{background:var(--nova-background,#fff)}
+.site-shell .primary-button,.site-shell .product-card,.site-shell .hero-floating,.site-shell .category-tabs button,.site-shell .search-box{border-radius:var(--nova-radius,12px)}
+.hero-custom-image{width:100%;height:100%;object-fit:contain;padding:24px;max-height:505px}.hero-copy h1,.hero-copy p{overflow-wrap:anywhere;white-space:pre-line}.hero-item{max-width:100%;overflow:hidden}

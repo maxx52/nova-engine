@@ -2,9 +2,16 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import ContentPage from './ContentPage.vue'
 import BlogView from './BlogView.vue'
+import CodeFrame from '../../../shared/CodeFrame.vue'
+import {designValue} from '../../../shared/siteDesign.js'
 import {safeLink} from '../../../shared/contentSafety.js'
 
 const siteSettings=ref({name:'NOVA',logo_url:'',home_slug:null,shop_enabled:true,blog_enabled:false,menu:[]})
+const design=ref(designValue())
+const t=computed(()=>design.value.texts)
+const customHome=computed(()=>routePath.value==='/'&&design.value.code.enabled&&design.value.code.placement==='home')
+const designStyle=computed(()=>({'--nova-primary':design.value.colors.primary,'--nova-accent':design.value.colors.accent,'--nova-background':design.value.colors.background,'--nova-text':design.value.colors.text,'--nova-hero':design.value.colors.hero,'--nova-footer':design.value.colors.footer,'--nova-radius':design.value.radius+'px','--nova-width':design.value.width+'px',fontFamily:design.value.font+', Arial, sans-serif'}))
+const publicData=computed(()=>({settings:siteSettings.value,products:products.value}))
 const settingsReady=ref(false)
 const settingsError=ref('')
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
@@ -43,12 +50,6 @@ async function closeProduct() {
 }
 function syncUrl() { chosenVariant.value=-1;const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
 const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
-const art = {
-  'Электроника': { icon: '🎧', background: 'linear-gradient(145deg,#e8e8ff,#d4dbfb)' },
-  'Дом': { icon: '🪴', background: 'linear-gradient(145deg,#fff1df,#ffe2d3)' },
-  'Аксессуары': { icon: '🎒', background: 'linear-gradient(145deg,#d9f1ec,#bce3d8)' }
-}
-const productIcons = ['🎧','💡','🎒','☕','⌨️','🗂️']
 const categories = computed(() => ['Все товары', ...new Set(products.value.map(p => p.category))])
 const visibleProducts = computed(() => products.value.filter(p =>
   (selectedCategory.value === 'Все товары' || descendantNames.value.includes(p.category)) &&
@@ -59,14 +60,14 @@ const itemCount = computed(() => cart.value.reduce((sum, item) => sum + item.qua
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0))
 function addToCart(product,variant=null) {
   const choice=variant || (product.variants?.length ? product.variants.find(v=>v.stock>0) : null)
-  if(product.variants?.length && !choice){notice.value='Нет доступных вариантов';return}
-  if(choice && choice.stock<=0){notice.value='Вариант отсутствует';return}
+  if(product.variants?.length && !choice){notice.value=t.value.no_variants;return}
+  if(choice && choice.stock<=0){notice.value=t.value.variant_unavailable;return}
   const key=product.id+':'+(choice?.name||'base')
   const existing=cart.value.find(item=>item.cartKey===key)
   if(existing)existing.quantity+=1
   else cart.value.push({...product,cartKey:key,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:1})
 
-  notice.value = 'Товар добавлен в корзину'
+  notice.value = t.value.added
   window.setTimeout(() => notice.value = '', 2400)
 }
 function changeQty(item, delta) {
@@ -81,6 +82,10 @@ onMounted(async () => {
     if(!settingsResponse.ok)throw Error('Не удалось загрузить настройки сайта')
     siteSettings.value=await settingsResponse.json()
     document.title=siteSettings.value.name
+    const designResponse=await fetch('/api/design')
+    if(designResponse.ok)design.value=designValue(await designResponse.json())
+    else if(designResponse.status!==404)throw Error('Не удалось загрузить оформление')
+    const style=document.createElement('link');style.rel='stylesheet';style.href='/api/design/style.css';document.head.append(style)
     settingsReady.value=true
     if(!shopEnabled.value)return
     const response = await fetch('/api/products')
@@ -94,10 +99,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="!settingsReady" class="empty-state" role="status">{{settingsError || 'Загрузка сайта…'}}</div>
-  <div v-else class="site-shell">
-    <div class="announcement"><span>{{siteSettings.name}}</span><span class="announcement-right">NOVA Engine · Preview 0.14</span></div>
-    <header class="site-header">
+  <div v-if="!settingsReady" class="empty-state" role="status">{{settingsError || t.loading}}</div>
+  <div v-else class="site-shell" :style="designStyle">
+    <div v-if="design.visibility.announcement" class="announcement"><span>{{t.announcement || siteSettings.name}}</span></div>
+    <header v-if="design.visibility.header" class="site-header">
       <div class="container header-inner">
         <a href="/" class="logo" :aria-label="siteSettings.name+' — главная'"><img v-if="siteSettings.logo_url" :src="siteSettings.logo_url" :alt="siteSettings.name" class="site-logo-image"><span v-else class="logo-symbol">{{siteSettings.name.slice(0,1)}}</span><span class="site-name">{{siteSettings.name}}</span></a>
         <nav class="main-nav" :class="{ 'nav-open': mobileMenu }" aria-label="Основная навигация">
@@ -105,78 +110,81 @@ onMounted(async () => {
         </nav>
         <div class="header-actions">
           <button class="icon-button mobile-nav-button" aria-label="Меню" @click="mobileMenu = !mobileMenu">☰</button>
-          <button v-if="shopEnabled" class="cart-trigger" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">Корзина</span><span class="cart-count">{{ itemCount }}</span></button>
+          <button v-if="shopEnabled" class="cart-trigger" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">{{t.cart}}</span><span class="cart-count">{{ itemCount }}</span></button>
         </div>
       </div>
     </header>
 
-    <BlogView v-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" />
-    <main v-else-if="isBlogRoute" class="container site-welcome"><h1>Страница не найдена</h1><a href="/">На главную →</a></main>
-    <ContentPage v-else-if="isContentRoute" :path="contentPath" :site-name="siteSettings.name" />
-    <main v-else-if="!shopEnabled" class="container site-welcome"><h1>{{routePath==='/'?siteSettings.name:'Страница не найдена'}}</h1><a v-if="routePath!=='/'" href="/">На главную →</a></main>
+    <main v-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
+    <BlogView v-else-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" :texts="t" />
+    <main v-else-if="isBlogRoute" class="container site-welcome"><h1>{{t.not_found}}</h1><a href="/">{{t.home_link}}</a></main>
+    <ContentPage v-else-if="isContentRoute" :path="contentPath" :site-name="siteSettings.name" :texts="t" />
+    <main v-else-if="!shopEnabled" class="container site-welcome"><h1>{{routePath==='/'?siteSettings.name:t.not_found}}</h1><a v-if="routePath!=='/'" href="/">{{t.home_link}}</a></main>
     <main v-else-if="!activeProduct">
-      <section class="hero-section">
+      <template v-for="sectionId in design.home_order" :key="sectionId">
+      <section v-if="sectionId==='hero' && design.visibility.hero" class="hero-section">
         <div class="container hero-grid">
           <div class="hero-copy">
-            <div class="eyebrow"><span class="green-dot"></span> ПРОСТРАНСТВО ВОЗМОЖНОСТЕЙ</div>
-            <h1>Вещи, которые<br><em>делают жизнь</em><br>интереснее.</h1>
-            <p>Технологии, уют и детали на каждый день. Откройте подборку товаров в нашем демонстрационном магазине.</p>
-            <div class="hero-actions"><button class="primary-button" @click="scrollToCatalog">Смотреть каталог <span>↗</span></button><span class="hero-note">Больше выбора. Меньше лишнего.</span></div>
+            <div class="eyebrow"><span class="green-dot"></span> {{t.hero_eyebrow}}</div>
+            <h1>{{t.hero_title}}<br><em>{{t.hero_accent}}</em><br>{{t.hero_end}}</h1>
+            <p>{{t.hero_description}}</p>
+            <div class="hero-actions"><a class="primary-button" :href="design.hero_button_url">{{t.hero_button}} <span>↗</span></a><span class="hero-note">{{t.hero_note}}</span></div>
           </div>
           <div class="hero-art" aria-label="Подборка товаров">
-            <div class="hero-circle"></div><div class="hero-decor hero-decor-one">✦</div>
-            <div class="hero-item hero-item-main">🎧</div><div class="hero-item hero-item-second">🎒</div>
-            <div class="hero-floating"><span>✦</span><div><strong>Выбирай лучшее</strong><small>Каждый день</small></div></div>
+            <img v-if="design.hero_image_url" :src="design.hero_image_url" :alt="t.hero_title" class="hero-custom-image"><template v-else><div class="hero-circle"></div><div class="hero-item hero-item-main">{{t.hero_main_icon}}</div><div class="hero-item hero-item-second">{{t.hero_second_icon}}</div></template>
+            <div v-if="design.visibility.floating" class="hero-floating"><span>{{t.hero_float_icon}}</span><div><strong>{{t.hero_float_title}}</strong><small>{{t.hero_float_text}}</small></div></div>
           </div>
         </div>
       </section>
 
-      <section class="benefit-strip" id="advantages">
+      <section v-if="sectionId==='advantages' && design.visibility.advantages" class="benefit-strip" id="advantages">
         <div class="container benefits">
-          <div><span class="benefit-icon">✧</span><span><strong>Удобный выбор</strong><small>Всё необходимое рядом</small></span></div>
-          <div><span class="benefit-icon">♧</span><span><strong>Разные категории</strong><small>Товары на каждый день</small></span></div>
-          <div><span class="benefit-icon">♡</span><span><strong>С любовью к деталям</strong><small>Продуманный ассортимент</small></span></div>
+          <div><span class="benefit-icon">{{t.benefit_1_icon}}</span><span><strong>{{t.benefit_1_title}}</strong><small>{{t.benefit_1_text}}</small></span></div>
+          <div><span class="benefit-icon">{{t.benefit_2_icon}}</span><span><strong>{{t.benefit_2_title}}</strong><small>{{t.benefit_2_text}}</small></span></div>
+          <div><span class="benefit-icon">{{t.benefit_3_icon}}</span><span><strong>{{t.benefit_3_title}}</strong><small>{{t.benefit_3_text}}</small></span></div>
         </div>
       </section>
 
-      <section class="catalog-section container" id="catalog">
-        <div class="section-heading"><div><span class="section-kicker">НАШ АССОРТИМЕНТ</span><h2>Популярные товары<span class="heading-period">.</span></h2><p>Откройте для себя что-то новое.</p></div><span class="catalog-count">Найдено: {{ visibleProducts.length }}</span></div>
-        <div class="toolbar"><div class="category-tabs"><button v-for="category in categories" :key="category" :class="{ active: selectedCategory === category }" @click="selectedCategory = category;attributeFilter = ''">{{ category }}</button></div><select v-model="attributeFilter" aria-label="Фильтр характеристик" class="catalog-filter"><option value="">Все характеристики</option><option v-for="attr in availableAttributes" :key="attr" :value="attr">{{attr.replace('::',' — ')}}</option></select><label class="search-box"><span>⌕</span><input v-model="search" placeholder="Поиск товаров..." aria-label="Поиск товаров"></label></div>
-        <p v-if="error" class="error-message">{{ error }}. Проверь, запущен ли API на порту 3001.</p>
-        <p v-if="loading" class="empty-state">Загружаем каталог…</p>
+      <section v-if="sectionId==='catalog' && design.visibility.catalog" class="catalog-section container" id="catalog">
+        <div class="section-heading"><div><span class="section-kicker">{{t.catalog_kicker}}</span><h2>{{t.catalog_title}}<span class="heading-period">.</span></h2><p>{{t.catalog_description}}</p></div><span class="catalog-count">{{t.found}} {{ visibleProducts.length }}</span></div>
+        <div class="toolbar"><div class="category-tabs"><button v-for="category in categories" :key="category" :class="{ active: selectedCategory === category }" @click="selectedCategory = category;attributeFilter = ''">{{ category==='Все товары'?t.all_products:category }}</button></div><select v-model="attributeFilter" aria-label="Фильтр характеристик" class="catalog-filter"><option value="">{{t.all_attributes}}</option><option v-for="attr in availableAttributes" :key="attr" :value="attr">{{attr.replace('::',' — ')}}</option></select><label class="search-box"><span>⌕</span><input v-model="search" :placeholder="t.search" :aria-label="t.search"></label></div>
+        <p v-if="error" class="error-message">{{ t.load_error }}</p>
+        <p v-if="loading" class="empty-state">{{t.catalog_loading}}</p>
         <div v-else-if="visibleProducts.length" class="product-grid">
           <article v-for="(product, index) in visibleProducts" :key="product.id" class="product-card">
-            <div class="product-image" @click="openProduct(product)" style="cursor:pointer" :style="{ background: art[product.category]?.background || 'linear-gradient(145deg,#e6eaf1,#cfd9e6)' }">
-              <span class="product-badge" v-if="index < 2">{{ index === 0 ? 'ХИТ ПРОДАЖ' : 'ВЫБОР NOVA' }}</span><img v-if="product.image_url" :src="product.image_url" :alt="product.name" style="width:100%;height:100%;object-fit:contain;padding:24px"><span v-else class="product-emoji">{{ productIcons[(product.id - 1) % productIcons.length] || '📦' }}</span>
+            <div class="product-image" @click="openProduct(product)" style="cursor:pointer" :style="{ background: design.colors.hero }">
+              <span class="product-badge" v-if="index < 2">{{ index === 0 ? t.badge_1 : t.badge_2 }}</span><img v-if="product.image_url" :src="product.image_url" :alt="product.name" style="width:100%;height:100%;object-fit:contain;padding:24px"><span v-else class="product-emoji">{{t.fallback_icon}}</span>
               <button class="quick-add" @click.stop="addToCart(product)" :aria-label="'Добавить ' + product.name + ' в корзину'" >＋</button>
             </div>
-            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3><a :href="'/product/'+product.id" @click.prevent="openProduct(product)">{{ product.name }}</a></h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.stock===0 && product.sku">В корзину ↗</button></div></div>
+            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3><a :href="'/product/'+product.id" @click.prevent="openProduct(product)">{{ product.name }}</a></h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.stock===0 && product.sku">{{t.add_to_cart}}</button></div></div>
           </article>
         </div>
-        <p v-else-if="!error" class="empty-state">По вашему запросу товары не найдены.</p>
+        <p v-else-if="!error" class="empty-state">{{t.no_products}}</p>
       </section>
+      </template>
     </main>
     <main v-else class="container" style="padding-top:44px;padding-bottom:90px">
-      <button class="detail-back" @click="closeProduct">← Назад в каталог</button>
+      <button class="detail-back" @click="closeProduct">{{t.back_catalog}}</button>
       <div class="detail-layout">
         <div>
-          <div class="detail-photo"><img v-if="currentImage" :src="currentImage" :alt="activeProduct.name"><span v-else style="font-size:90px">📦</span></div>
+          <div class="detail-photo"><img v-if="currentImage" :src="currentImage" :alt="activeProduct.name"><span v-else style="font-size:90px">{{t.fallback_icon}}</span></div>
           <div class="detail-thumbnails"><button v-for="url in productImages" :key="url" :class="{ chosen:currentImage===url }" @click="currentImage=url"><img :src="url" :alt="activeProduct.name"></button></div>
         </div>
         <div class="detail-info">
           <span class="section-kicker">{{activeProduct.category}}</span>
           <h1>{{activeProduct.name}}</h1>
-          <p class="detail-sku">Артикул: {{selectedVariant?.sku || activeProduct.sku || 'не указан'}}</p>
+          <p class="detail-sku">{{t.sku}} {{selectedVariant?.sku || activeProduct.sku || t.no_sku}}</p>
           <strong class="detail-price">{{currency(selectedVariant?.price ?? activeProduct.price)}}</strong>
-          <p class="detail-stock">{{(selectedVariant?.stock ?? activeProduct.stock)>0?'● В наличии: '+(selectedVariant?.stock ?? activeProduct.stock):'Нет в наличии'}}</p>
-          <div v-if="activeProduct.variants?.length" class="variant-picker"><strong>Выберите вариант</strong><div><button v-for="(v,i) in activeProduct.variants" :key="i" :disabled="v.stock===0" :class="{chosen:chosenVariant===i}" @click="chosenVariant=i">{{v.name}} · {{currency(v.price)}}</button></div></div><button class="primary-button" :disabled="(activeProduct.variants?.length && chosenVariant<0) || (selectedVariant?.stock===0)" @click="addToCart(activeProduct,selectedVariant)">Добавить в корзину →</button>
-          <h2>Описание товара</h2>
-          <p class="detail-description">{{activeProduct.description || 'Описание пока не добавлено.'}}</p><div v-if="activeProduct.attributes?.length" class="detail-attributes"><h2>Характеристики</h2><div v-for="(attr,i) in activeProduct.attributes" :key="i"><span>{{attr.name}}</span><strong>{{attr.value}}</strong></div></div>
+          <p class="detail-stock">{{(selectedVariant?.stock ?? activeProduct.stock)>0?t.in_stock+' '+(selectedVariant?.stock ?? activeProduct.stock):t.out_of_stock}}</p>
+          <div v-if="activeProduct.variants?.length" class="variant-picker"><strong>{{t.choose_variant}}</strong><div><button v-for="(v,i) in activeProduct.variants" :key="i" :disabled="v.stock===0" :class="{chosen:chosenVariant===i}" @click="chosenVariant=i">{{v.name}} · {{currency(v.price)}}</button></div></div><button class="primary-button" :disabled="(activeProduct.variants?.length && chosenVariant<0) || (selectedVariant?.stock===0)" @click="addToCart(activeProduct,selectedVariant)">{{t.product_add}}</button>
+          <h2>{{t.description}}</h2>
+          <p class="detail-description">{{activeProduct.description || t.no_description}}</p><div v-if="activeProduct.attributes?.length" class="detail-attributes"><h2>{{t.attributes}}</h2><div v-for="(attr,i) in activeProduct.attributes" :key="i"><span>{{attr.name}}</span><strong>{{attr.value}}</strong></div></div>
         </div>
       </div>
     </main>
-    <footer class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>Демонстрация платформы · {{ new Date().getFullYear() }}</span><span>Создано на Vue 3 + JavaScript</span></div></footer>
-    <div v-if="shopEnabled && cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">ВАШИ ПОКУПКИ</span><h2>Корзина ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><div v-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>В корзине пока пусто</h3><p>Добавьте понравившиеся товары из каталога.</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">К покупкам ↗</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.id" class="cart-item"><span class="cart-item-art">{{ productIcons[(item.id - 1) % productIcons.length] || '📦' }}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length" class="drawer-bottom"><div class="total-row"><span>Итого</span><strong>{{ currency(cartTotal) }}</strong></div><p>Демонстрационная корзина — оформление реальных заказов появится позже.</p><button class="primary-button" disabled>Оформление скоро появится</button></div></aside></div>
+    <CodeFrame v-if="design.code.enabled && design.code.placement==='footer'" :key="routePath" :code="design.code" :data="publicData" navigation />
+    <footer v-if="design.visibility.footer" class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>{{t.footer_text}}<template v-if="design.visibility.year"> · {{ new Date().getFullYear() }}</template></span><span>{{t.footer_credit}}</span></div></footer>
+    <div v-if="shopEnabled && cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">{{t.cart_kicker}}</span><h2>{{t.cart}} ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><div v-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>{{t.cart_empty}}</h3><p>{{t.cart_hint}}</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">{{t.cart_shop}}</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.id" class="cart-item"><span class="cart-item-art">{{t.fallback_icon}}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length" class="drawer-bottom"><div class="total-row"><span>{{t.cart_total}}</span><strong>{{ currency(cartTotal) }}</strong></div><p>{{t.cart_note}}</p><button class="primary-button" disabled>{{t.checkout}}</button></div></aside></div>
     <div v-if="notice" class="toast">{{ notice }} ✓</div>
   </div>
 </template>

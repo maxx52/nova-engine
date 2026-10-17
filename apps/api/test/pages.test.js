@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validatePage, registerPages } from '../src/pages.js'
+import { validatePage, registerPages, validateSections } from '../src/pages.js'
 const valid = { title: 'О нас', slug: 'about', content: 'Текст', published: false }
 test('page validation rejects reserved paths, invalid slugs and invalid payloads', () => {
   assert.equal(validatePage(valid), null)
@@ -57,4 +57,12 @@ test('HTTP page writes persist ordered sections as JSON and require admin key', 
     const rejected=await app.inject({method:'POST',url:'/api/admin/pages',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[{...section,button_url:'javascript:alert(1)'}]}})
     assert.equal(rejected.statusCode,400);assert.equal(calls.length,2)
   } finally { await app.close() }
+})
+
+test('code sections validate isolated HTML, CSS and JavaScript with bounded source sizes',()=>{
+ const section={id:'custom-block',type:'code',code:{html:'<h2>Custom</h2>',css:'h2{color:green}',js:'document.body.dataset.ready="yes"'}}
+ assert.equal(validateSections([section]),null)
+ assert.ok(validateSections([{...section,code:{...section.code,js:'x'.repeat(100001)}}]))
+ assert.ok(validateSections([{...section,code:{html:'',css:''}}]))
+ assert.ok(validateSections([section,section]))
 })

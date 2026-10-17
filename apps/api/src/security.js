@@ -31,7 +31,10 @@ export function registerSecurity(app,{secure=false,now=()=>Date.now(),perIp=240,
   bucket.count++;global.count++;buckets.set(req.ip,bucket)
  })
  app.addHook('onSend',async(req,reply,payload)=>{
-  for(const [key,value]of Object.entries(httpHeaders({https:secure,asset:true})))reply.header(key,value)
+  const headers=httpHeaders({https:secure,asset:true})
+  if(req.routeOptions.config?.novaCodeFrame&&reply.statusCode===200){headers['Content-Security-Policy']=reply.getHeader('Content-Security-Policy');headers['X-Frame-Options']='SAMEORIGIN'}
+  if(req.url.startsWith('/uploads/')&&reply.statusCode===200)headers['Cross-Origin-Resource-Policy']='cross-origin'
+  for(const [key,value]of Object.entries(headers))reply.header(key,value)
   if(req.url.startsWith('/api/'))reply.header('Cache-Control','no-store').header('Vary','Cookie, Origin')
   if(reply.statusCode===503)reply.header('Retry-After','2')
   return payload

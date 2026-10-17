@@ -1,7 +1,8 @@
 <script setup>
+import {defaultTexts} from '../../../shared/siteDesign.js'
 import { ref, watch } from 'vue'
 import PageSections from './PageSections.vue'
-const props = defineProps({ path: String, siteName: {type:String,default:'NOVA'} })
+const props = defineProps({ texts:{type:Object,default:()=>defaultTexts}, path: String, siteName: {type:String,default:'NOVA'} })
 const page = ref(null), loading = ref(false), error = ref('')
 let version = 0
 watch(() => props.path, async path => {
@@ -19,8 +20,8 @@ watch(() => props.path, async path => {
 </script>
 <template>
   <main class="container content-page">
-    <p v-if="loading" role="status">Загрузка страницы…</p>
-    <template v-else-if="error"><h1>{{ error }}</h1><a href="/">На главную →</a></template>
+    <p v-if="loading" role="status">{{texts.page_loading}}</p>
+    <template v-else-if="error"><h1>{{ error }}</h1><a href="/">{{texts.home_link}}</a></template>
     <article v-else-if="page"><h1>{{ page.title }}</h1><div class="page-text">{{ page.content }}</div><PageSections :sections="page.sections || []" /></article>
   </main>
 </template>

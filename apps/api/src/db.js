@@ -1,3 +1,4 @@
+import {initDesign} from './design.js'
 import pg from 'pg'
 import {initMediaSchema} from './mediaSchema.js'
 import { config } from 'dotenv'
@@ -82,6 +83,7 @@ export async function initDatabase() {
       await pool.query('INSERT INTO products (name,category,price,description) VALUES ($1,$2,$3,$4)',[name,category,price,description])
   }
   await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
+  await initDesign(pool)
   await initMediaSchema(pool)
 }
 export function productJson(row) { return {...row,id:Number(row.id),price:Number(row.price)} }

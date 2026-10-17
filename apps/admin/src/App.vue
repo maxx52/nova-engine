@@ -1,4 +1,5 @@
 <script setup>
+import DesignWorkspace from './DesignWorkspace.vue'
 import MediaPicker from './MediaPicker.vue'
 import { adminFetch } from './adminApi.js'
 import { ref, computed, onMounted } from 'vue'
@@ -10,6 +11,7 @@ import MediaLibrary from './MediaLibrary.vue'
 const siteSettings=ref({shop_enabled:true})
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
 const page=ref('overview')
+const designDirty=ref(false)
 const products=ref([])
 const loading=ref(true)
 const error=ref('')
@@ -32,14 +34,14 @@ const saveError=ref('')
 async function apiWrite(url,method,body){const response=await adminFetch(url,{method,headers:body?{'content-type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
 async function reload(){const r=await adminFetch('/api/products');if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
-const allSections=[{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
+const allSections=[{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories()]);error.value=''}catch(e){error.value=e.message}}}
 const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(n)
 const total=computed(()=>products.value.reduce((a,p)=>a+p.price,0))
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
 async function loadCategories(){const r=await adminFetch('/api/categories');if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
-function navigate(id){page.value=id;sidebar.value=false}
+function navigate(id){if(page.value==='design'&&id!=='design'&&designDirty.value&&!confirm('В оформлении есть несохранённые изменения. Перейти без сохранения?'))return;designDirty.value=false;page.value=id;sidebar.value=false}
 function edit(product=null){editingId.value=product?.id??null;form.value=product?{name:product.name,category:product.category,price:product.price,description:product.description,sku:product.sku||'',stock:product.stock||0,image_url:product.image_url||'',published:product.published!==false,images:[...(product.images?.length?product.images:(product.image_url?[product.image_url]:[]))],attributes:(product.attributes||[]).map(a=>({...a})),variants:(product.variants||[]).map(v=>({...v}))}:{name:'',category:categories.value[0]||'Другое',price:0,description:'',sku:'',stock:0,image_url:'',published:true,images:[],attributes:[],variants:[]};editorTab.value='main';dialog.value=true}
 async function save(){
   if(busy.value||!form.value.name.trim()||!Number.isFinite(Number(form.value.price))||Number(form.value.price)<0)return
@@ -82,13 +84,14 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.14 <small>Демо-режим</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.15 <small>Демо-режим</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Демоверсия</span><AccountActions /><div class="avatar">A</div></div></header>
     <main class="content">
       <div v-if="page==='media'"><div class="page-title"><div><h1>Медиатека</h1><p>Изображения сайта</p></div></div><MediaLibrary /></div>
       <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" />
+      <DesignWorkspace v-if="page==='design'" :api-write="apiWrite" @dirty="designDirty=$event" />
       <SiteSettings v-if="page==='settings'" :api-write="apiWrite" @saved="settingsSaved" />
       <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" />
       <div v-if="page==='overview'">

@@ -1,6 +1,7 @@
 <script setup>
+import {defaultTexts} from '../../../shared/siteDesign.js'
 import {ref,watch,computed} from 'vue'
-const props=defineProps({path:String,siteName:String})
+const props=defineProps({path:String,siteName:String,texts:{type:Object,default:()=>defaultTexts}})
 const data=ref(null),article=ref(null),loading=ref(false),error=ref('')
 const initial=new URLSearchParams(location.search)
 const category=ref(initial.get('category')||''),tag=ref(initial.get('tag')||''),page=ref(Number(initial.get('page'))||1)
@@ -23,13 +24,13 @@ watch(()=>props.path,()=>load(),{immediate:true})
 </script>
 <template>
 <main class="container blog-view">
-<p v-if="loading" role="status">Загрузка блога…</p><div v-else-if="error" role="alert"><h1>{{error}}</h1><a href="/blog">К списку статей →</a></div>
-<template v-else-if="data"><div class="blog-heading"><h1>Блог</h1><span>Публикаций: {{data.total}}</span></div>
-<form class="blog-filters" @submit.prevent="load(1)"><label>Рубрика<select v-model="category"><option value="">Все рубрики</option><option v-for="value in data.categories" :key="value">{{value}}</option></select></label><label>Тег<select v-model="tag"><option value="">Все теги</option><option v-for="value in data.tags" :key="value">{{value}}</option></select></label><button class="primary-button">Показать</button></form>
-<div v-if="data.items.length" class="blog-grid"><article v-for="post in data.items" :key="post.id" class="post-card"><a :href="'/blog/'+post.slug" class="post-cover" v-if="post.cover_url"><img :src="post.cover_url" :alt="post.title" loading="lazy"></a><div class="post-summary"><div class="post-meta"><span v-if="post.category">{{post.category}}</span><time v-if="post.published_at" :datetime="post.published_at">{{date(post.published_at)}}</time></div><h2><a :href="'/blog/'+post.slug">{{post.title}}</a></h2><p>{{post.excerpt}}</p><div class="post-tags"><a v-for="value in post.tags" :key="value" :href="'/blog?tag='+encodeURIComponent(value)">#{{value}}</a></div><a :href="'/blog/'+post.slug" class="read-post">Читать →</a></div></article></div><p v-else>Публикаций по выбранным условиям пока нет.</p>
-<nav v-if="data.total>12 || page>1" class="blog-pagination" aria-label="Страницы блога"><button :disabled="page<=1" @click="load(page-1)">← Назад</button><span>Страница {{page}}</span><button :disabled="page*12>=data.total" @click="load(page+1)">Далее →</button></nav>
+<p v-if="loading" role="status">{{texts.blog_loading}}</p><div v-else-if="error" role="alert"><h1>{{error}}</h1><a href="/blog">{{texts.blog_back}}</a></div>
+<template v-else-if="data"><div class="blog-heading"><h1>{{texts.blog_title}}</h1><span>{{texts.blog_count}} {{data.total}}</span></div>
+<form class="blog-filters" @submit.prevent="load(1)"><label>{{texts.blog_rubric}}<select v-model="category"><option value="">{{texts.blog_all_rubrics}}</option><option v-for="value in data.categories" :key="value">{{value}}</option></select></label><label>{{texts.blog_tag}}<select v-model="tag"><option value="">{{texts.blog_all_tags}}</option><option v-for="value in data.tags" :key="value">{{value}}</option></select></label><button class="primary-button">{{texts.blog_filter}}</button></form>
+<div v-if="data.items.length" class="blog-grid"><article v-for="post in data.items" :key="post.id" class="post-card"><a :href="'/blog/'+post.slug" class="post-cover" v-if="post.cover_url"><img :src="post.cover_url" :alt="post.title" loading="lazy"></a><div class="post-summary"><div class="post-meta"><span v-if="post.category">{{post.category}}</span><time v-if="post.published_at" :datetime="post.published_at">{{date(post.published_at)}}</time></div><h2><a :href="'/blog/'+post.slug">{{post.title}}</a></h2><p>{{post.excerpt}}</p><div class="post-tags"><a v-for="value in post.tags" :key="value" :href="'/blog?tag='+encodeURIComponent(value)">#{{value}}</a></div><a :href="'/blog/'+post.slug" class="read-post">{{texts.blog_read}}</a></div></article></div><p v-else>{{texts.blog_empty}}</p>
+<nav v-if="data.total>12 || page>1" class="blog-pagination" aria-label="Страницы блога"><button :disabled="page<=1" @click="load(page-1)">{{texts.previous}}</button><span>{{texts.page_number}} {{page}}</span><button :disabled="page*12>=data.total" @click="load(page+1)">{{texts.next}}</button></nav>
 </template>
-<article v-else-if="article" class="post-detail"><a href="/blog">← Все статьи</a><div class="post-meta"><span>{{article.category}}</span><time v-if="article.published_at" :datetime="article.published_at">{{date(article.published_at)}}</time></div><h1>{{article.title}}</h1><p v-if="article.excerpt" class="post-lead">{{article.excerpt}}</p><img v-if="article.cover_url" :src="article.cover_url" :alt="article.title" class="detail-cover"><div class="post-content">{{article.content}}</div><div class="post-tags"><a v-for="value in article.tags" :key="value" :href="'/blog?tag='+encodeURIComponent(value)">#{{value}}</a></div></article>
+<article v-else-if="article" class="post-detail"><a href="/blog">{{texts.blog_all}}</a><div class="post-meta"><span>{{article.category}}</span><time v-if="article.published_at" :datetime="article.published_at">{{date(article.published_at)}}</time></div><h1>{{article.title}}</h1><p v-if="article.excerpt" class="post-lead">{{article.excerpt}}</p><img v-if="article.cover_url" :src="article.cover_url" :alt="article.title" class="detail-cover"><div class="post-content">{{article.content}}</div><div class="post-tags"><a v-for="value in article.tags" :key="value" :href="'/blog?tag='+encodeURIComponent(value)">#{{value}}</a></div></article>
 </main>
 </template>
 <style scoped>
