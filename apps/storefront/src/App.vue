@@ -124,7 +124,7 @@ onMounted(async () => {
             <div class="hero-actions"><button class="primary-button" @click="scrollToCatalog">Смотреть каталог <span>↗</span></button><span class="hero-note">Больше выбора. Меньше лишнего.</span></div>
           </div>
           <div class="hero-art" aria-label="Подборка товаров">
-            <div class="hero-circle"></div><div class="hero-decor hero-decor-one">✦</div><div class="hero-decor hero-decor-two">✳</div>
+            <div class="hero-circle"></div><div class="hero-decor hero-decor-one">✦</div>
             <div class="hero-item hero-item-main">🎧</div><div class="hero-item hero-item-second">🎒</div>
             <div class="hero-floating"><span>✦</span><div><strong>Выбирай лучшее</strong><small>Каждый день</small></div></div>
           </div>
