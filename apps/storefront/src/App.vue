@@ -118,7 +118,7 @@ onMounted(async () => {
     <main v-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
     <BlogView v-else-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" :texts="t" />
     <main v-else-if="isBlogRoute" class="container site-welcome"><h1>{{t.not_found}}</h1><a href="/">{{t.home_link}}</a></main>
-    <ContentPage v-else-if="isContentRoute" :path="contentPath" :site-name="siteSettings.name" :texts="t" />
+    <ContentPage v-else-if="isContentRoute" :site-data="publicData" :path="contentPath" :site-name="siteSettings.name" :texts="t" />
     <main v-else-if="!shopEnabled" class="container site-welcome"><h1>{{routePath==='/'?siteSettings.name:t.not_found}}</h1><a v-if="routePath!=='/'" href="/">{{t.home_link}}</a></main>
     <main v-else-if="!activeProduct">
       <template v-for="sectionId in design.home_order" :key="sectionId">

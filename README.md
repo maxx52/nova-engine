@@ -267,3 +267,5 @@ location = /api/code-frame {
 ```
 
 Укажите в новом snippet фактический локальный порт API. Не включайте в этот location общий `api-proxy.conf`, который скрывает заголовки iframe. Полный пример обновлён в `deploy/nginx.conf.example`. На одном поддомене админку собирайте с `npm run build -w @nova/admin -- --base=/admin/`; ссылка на публичные страницы в production по умолчанию использует текущий домен, либо `VITE_SITE_URL`.
+
+Путь `/uploads/` в nginx использует `deploy/public-media-proxy.conf`: он сохраняет CORP cross-origin и защитные заголовки изображений от API. Это необходимо для фотографий в изолированных блоках кода.
