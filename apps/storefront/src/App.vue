@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import CheckoutForm from './CheckoutForm.vue'
 import ContentPage from './ContentPage.vue'
 import BlogView from './BlogView.vue'
 import CodeFrame from '../../../shared/CodeFrame.vue'
@@ -33,6 +34,8 @@ const loading = ref(true)
 const error = ref('')
 const selectedCategory = ref('Все товары')
 const cartOpen = ref(false)
+const checkoutOpen=ref(false)
+const checkoutLocked=ref(false)
 const mobileMenu = ref(false)
 const notice = ref('')
 const activeProduct = ref(null)
@@ -49,7 +52,7 @@ async function closeProduct() {
   scrollToCatalog()
 }
 function syncUrl() { chosenVariant.value=-1;const match = location.pathname.match(/^\/product\/(\d+)\/?$/); activeProduct.value = match ? (products.value.find(p=>p.id===Number(match[1])) || null) : null; currentImage.value = activeProduct.value?.image_url || activeProduct.value?.images?.[0] || '' }
-const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
+const currency = value => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 2 }).format(value)
 const categories = computed(() => ['Все товары', ...new Set(products.value.map(p => p.category))])
 const visibleProducts = computed(() => products.value.filter(p =>
   (selectedCategory.value === 'Все товары' || descendantNames.value.includes(p.category)) &&
@@ -59,21 +62,27 @@ const visibleProducts = computed(() => products.value.filter(p =>
 const itemCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0))
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0))
 function addToCart(product,variant=null) {
+  if(checkoutLocked.value){notice.value=t.value.checkout_locked;return}
+  checkoutOpen.value=false
   const choice=variant || (product.variants?.length ? product.variants.find(v=>v.stock>0) : null)
   if(product.variants?.length && !choice){notice.value=t.value.no_variants;return}
   if(choice && choice.stock<=0){notice.value=t.value.variant_unavailable;return}
-  const key=product.id+':'+(choice?.name||'base')
+  if(!choice && product.stock<=0){notice.value=t.value.out_of_stock;return}
+  const key=JSON.stringify([product.id,choice?.name||''])
   const existing=cart.value.find(item=>item.cartKey===key)
-  if(existing)existing.quantity+=1
-  else cart.value.push({...product,cartKey:key,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:1})
+  if(existing){if(existing.quantity>=Math.min(100,choice?.stock??product.stock)){notice.value=t.value.stock_limit;return}existing.quantity+=1}
+  else cart.value.push({...product,cartKey:key,variantName:choice?.name||'',available:choice?.stock??product.stock,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:1})
 
   notice.value = t.value.added
   window.setTimeout(() => notice.value = '', 2400)
 }
 function changeQty(item, delta) {
+  if(checkoutLocked.value)return
+  if(delta>0&&item.quantity>=Math.min(100,item.available)){notice.value=t.value.stock_limit;return}
   item.quantity += delta
-  if (item.quantity <= 0) cart.value = cart.value.filter(p => p.id !== item.id)
+  if (item.quantity <= 0) cart.value = cart.value.filter(p => p.cartKey !== item.cartKey)
 }
+async function orderComplete(){cart.value=[];try{const r=await fetch('/api/products',{credentials:'omit'});if(r.ok)products.value=await r.json()}catch{} }
 function scrollToCatalog() { document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }) }
 onMounted(async () => {
   window.addEventListener('popstate',syncUrl)
@@ -110,7 +119,7 @@ onMounted(async () => {
         </nav>
         <div class="header-actions">
           <button class="icon-button mobile-nav-button" aria-label="Меню" @click="mobileMenu = !mobileMenu">☰</button>
-          <button v-if="shopEnabled" class="cart-trigger" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">{{t.cart}}</span><span class="cart-count">{{ itemCount }}</span></button>
+          <button v-if="shopEnabled" class="cart-trigger" :aria-label="t.cart+' '+itemCount" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">{{t.cart}}</span><span class="cart-count">{{ itemCount }}</span></button>
         </div>
       </div>
     </header>
@@ -154,9 +163,9 @@ onMounted(async () => {
           <article v-for="(product, index) in visibleProducts" :key="product.id" class="product-card">
             <div class="product-image" @click="openProduct(product)" style="cursor:pointer" :style="{ background: design.colors.hero }">
               <span class="product-badge" v-if="index < 2">{{ index === 0 ? t.badge_1 : t.badge_2 }}</span><img v-if="product.image_url" :src="product.image_url" :alt="product.name" style="width:100%;height:100%;object-fit:contain;padding:24px"><span v-else class="product-emoji">{{t.fallback_icon}}</span>
-              <button class="quick-add" @click.stop="addToCart(product)" :aria-label="'Добавить ' + product.name + ' в корзину'" >＋</button>
+              <button class="quick-add" @click.stop="addToCart(product)" :aria-label="'Добавить ' + product.name + ' в корзину'" :disabled="product.variants?.length?!product.variants.some(v=>v.stock>0):product.stock<=0">＋</button>
             </div>
-            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3><a :href="'/product/'+product.id" @click.prevent="openProduct(product)">{{ product.name }}</a></h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.stock===0 && product.sku">{{t.add_to_cart}}</button></div></div>
+            <div class="product-info"><span class="product-category">{{ product.category }}</span><h3><a :href="'/product/'+product.id" @click.prevent="openProduct(product)">{{ product.name }}</a></h3><p>{{ product.description }}</p><div class="product-bottom"><strong>{{ currency(product.price) }}</strong><button @click="addToCart(product)" :disabled="product.variants?.length?!product.variants.some(v=>v.stock>0):product.stock<=0">{{t.add_to_cart}}</button></div></div>
           </article>
         </div>
         <p v-else-if="!error" class="empty-state">{{t.no_products}}</p>
@@ -176,7 +185,7 @@ onMounted(async () => {
           <p class="detail-sku">{{t.sku}} {{selectedVariant?.sku || activeProduct.sku || t.no_sku}}</p>
           <strong class="detail-price">{{currency(selectedVariant?.price ?? activeProduct.price)}}</strong>
           <p class="detail-stock">{{(selectedVariant?.stock ?? activeProduct.stock)>0?t.in_stock+' '+(selectedVariant?.stock ?? activeProduct.stock):t.out_of_stock}}</p>
-          <div v-if="activeProduct.variants?.length" class="variant-picker"><strong>{{t.choose_variant}}</strong><div><button v-for="(v,i) in activeProduct.variants" :key="i" :disabled="v.stock===0" :class="{chosen:chosenVariant===i}" @click="chosenVariant=i">{{v.name}} · {{currency(v.price)}}</button></div></div><button class="primary-button" :disabled="(activeProduct.variants?.length && chosenVariant<0) || (selectedVariant?.stock===0)" @click="addToCart(activeProduct,selectedVariant)">{{t.product_add}}</button>
+          <div v-if="activeProduct.variants?.length" class="variant-picker"><strong>{{t.choose_variant}}</strong><div><button v-for="(v,i) in activeProduct.variants" :key="i" :disabled="v.stock===0" :class="{chosen:chosenVariant===i}" @click="chosenVariant=i">{{v.name}} · {{currency(v.price)}}</button></div></div><button class="primary-button" :disabled="activeProduct.variants?.length?!selectedVariant||selectedVariant.stock<=0:activeProduct.stock<=0" @click="addToCart(activeProduct,selectedVariant)">{{t.product_add}}</button>
           <h2>{{t.description}}</h2>
           <p class="detail-description">{{activeProduct.description || t.no_description}}</p><div v-if="activeProduct.attributes?.length" class="detail-attributes"><h2>{{t.attributes}}</h2><div v-for="(attr,i) in activeProduct.attributes" :key="i"><span>{{attr.name}}</span><strong>{{attr.value}}</strong></div></div>
         </div>
@@ -184,7 +193,7 @@ onMounted(async () => {
     </main>
     <CodeFrame v-if="design.code.enabled && design.code.placement==='footer'" :key="routePath" :code="design.code" :data="publicData" navigation />
     <footer v-if="design.visibility.footer" class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>{{t.footer_text}}<template v-if="design.visibility.year"> · {{ new Date().getFullYear() }}</template></span><span>{{t.footer_credit}}</span></div></footer>
-    <div v-if="shopEnabled && cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">{{t.cart_kicker}}</span><h2>{{t.cart}} ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><div v-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>{{t.cart_empty}}</h3><p>{{t.cart_hint}}</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">{{t.cart_shop}}</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.id" class="cart-item"><span class="cart-item-art">{{t.fallback_icon}}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length" class="drawer-bottom"><div class="total-row"><span>{{t.cart_total}}</span><strong>{{ currency(cartTotal) }}</strong></div><p>{{t.cart_note}}</p><button class="primary-button" disabled>{{t.checkout}}</button></div></aside></div>
+    <div v-if="shopEnabled" v-show="cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">{{t.cart_kicker}}</span><h2>{{t.cart}} ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><CheckoutForm v-if="checkoutOpen" :items="cart" :texts="t" @locked="checkoutLocked=$event" @complete="orderComplete" @back="checkoutOpen=false; cartOpen=false"/><div v-else-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>{{t.cart_empty}}</h3><p>{{t.cart_hint}}</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">{{t.cart_shop}}</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.cartKey" class="cart-item"><span class="cart-item-art">{{t.fallback_icon}}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length && !checkoutOpen" class="drawer-bottom"><div class="total-row"><span>{{t.cart_total}}</span><strong>{{ currency(cartTotal) }}</strong></div><p>{{t.cart_note}}</p><button class="primary-button" @click="checkoutOpen=true">{{t.checkout}}</button></div></aside></div>
     <div v-if="notice" class="toast">{{ notice }} ✓</div>
   </div>
 </template>

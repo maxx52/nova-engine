@@ -1,3 +1,4 @@
+import {registerCommerce} from './commerce.js'
 import {registerDesign} from './design.js'
 import {registerCodeFrame} from './codeFrame.js'
 import Fastify from 'fastify'
@@ -22,7 +23,7 @@ registerSecurity(app,{secure:security.secure})
 await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files:1,fields:0,parts:1 } })
 const uploadDirectory = process.env.UPLOAD_DIRECTORY?resolve(process.env.UPLOAD_DIRECTORY):fileURLToPath(new URL('../../../uploads/', import.meta.url))
 await mkdir(uploadDirectory, { recursive: true })
-const productFields = 'id,name,category,price,description,sku,stock,image_url,published,images,attributes,variants'
+const productFields = 'id,name,category,price,description,sku,stock,image_url,published,images,attributes,variants,revision::text'
 const adminKey = process.env.ADMIN_API_KEY
 if (!adminKey || adminKey.length < 16) {
   console.error('Set ADMIN_API_KEY (at least 16 characters) in .env before starting API')
@@ -37,6 +38,7 @@ registerCodeFrame(app)
 registerSettings(app, pool, requireAdmin)
 registerBlog(app, pool, requireAdmin)
 registerShopGuard(app,pool,isAdmin)
+registerCommerce(app,pool,requireAdmin,{origins:[...security.origins,...(security.production?[]:['http://localhost:5173','http://127.0.0.1:5173'])]})
 
 function validateProduct(body) {
   if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 150) return 'Название: от 1 до 150 символов'
@@ -44,7 +46,7 @@ function validateProduct(body) {
   if (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price < 0 || body.price > 9999999999.99) return 'Некорректная цена'
   if (typeof body.description !== 'string' || body.description.length > 20000) return 'Некорректное описание'
   if (body.sku !== undefined && (typeof body.sku !== 'string' || body.sku.length > 100)) return 'Некорректный артикул'
-  if (body.stock !== undefined && (!Number.isSafeInteger(body.stock) || body.stock < 0)) return 'Некорректный остаток'
+  if (body.stock !== undefined && (!Number.isSafeInteger(body.stock) || body.stock < 0 || body.stock>2147483647)) return 'Некорректный остаток'
   if (body.published !== undefined && typeof body.published !== 'boolean') return 'Некорректный статус'
   if (body.image_url !== undefined && (typeof body.image_url !== 'string' || !/^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(body.image_url) && body.image_url !== '')) return 'Некорректное изображение'
   if(body.images !== undefined && (!Array.isArray(body.images) || body.images.length > 12 || body.images.some(url => typeof url !== 'string' || !/^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(url)) || new Set(body.images).size !== body.images.length)) return 'Галерея: до 12 уникальных изображений'
@@ -52,13 +54,13 @@ function validateProduct(body) {
   const attrs=body.attributes??[]
   if(!Array.isArray(attrs)||attrs.length>50||attrs.some(a=>!a||typeof a.name!=='string'||!a.name.trim()||a.name.length>80||typeof a.value!=='string'||!a.value.trim()||a.value.length>300))return 'Некорректные характеристики'
   const variants=body.variants??[]
-  if(!Array.isArray(variants)||variants.length>100||variants.some(v=>!v||typeof v.name!=='string'||!v.name.trim()||v.name.length>120||typeof v.sku!=='string'||v.sku.length>100||typeof v.price!=='number'||!Number.isFinite(v.price)||v.price<0||v.price>9999999999.99||!Number.isSafeInteger(v.stock)||v.stock<0))return 'Некорректные варианты товара'
+  if(!Array.isArray(variants)||variants.length>100||variants.some(v=>!v||typeof v.name!=='string'||!v.name.trim()||v.name.length>120||typeof v.sku!=='string'||v.sku.length>100||typeof v.price!=='number'||!Number.isFinite(v.price)||v.price<0||v.price>9999999999.99||!Number.isSafeInteger(v.stock)||v.stock<0||v.stock>2147483647))return 'Некорректные варианты товара'
   if(new Set(variants.map(v=>v.name.trim().toLowerCase())).size!==variants.length)return 'Названия вариантов должны быть уникальными'
   return null
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.15.0',database:'connected'}
+  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.16.0',database:'connected'}
 })
 app.get('/api/products', async (request) => {
   const result = await pool.query('SELECT '+productFields+' FROM products'+(await isAdmin(request)?'':' WHERE published=TRUE')+' ORDER BY id')
@@ -77,9 +79,10 @@ app.put('/api/products/:id', { preHandler: requireAdmin }, async (request, reply
   if (!Number.isSafeInteger(id) || id <= 0) return reply.code(400).send({ error: 'Неверный ID' })
   const err = validateProduct(request.body)
   if (err) return reply.code(400).send({ error: err })
+  if(typeof request.body.revision!=='string'||! /^[1-9][0-9]{0,17}$/.test(request.body.revision))return reply.code(409).send({error:'Обновите карточку товара перед сохранением'})
   const {name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[],attributes=[],variants=[]}=request.body
-  const result = await pool.query('UPDATE products SET name=$1,category=$2,price=$3,description=$4,sku=$5,stock=$6,image_url=$7,published=$8,images=$9,attributes=$10,variants=$11,updated_at=NOW() WHERE id=$12 RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants),id])
-  if (!result.rowCount) return reply.code(404).send({error:'Товар не найден'})
+  const result = await pool.query('UPDATE products SET name=$1,category=$2,price=$3,description=$4,sku=$5,stock=$6,image_url=$7,published=$8,images=$9,attributes=$10,variants=$11,revision=revision+1,updated_at=NOW() WHERE id=$12 AND revision=$13 RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants),id,request.body.revision])
+  if (!result.rowCount) return reply.code(409).send({error:'Товар изменился, возможно оформлен заказ. Откройте карточку заново.'})
   return productJson(result.rows[0])
 })
 app.delete('/api/products/:id', { preHandler: requireAdmin }, async (request, reply) => {

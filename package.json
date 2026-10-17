@@ -16,6 +16,7 @@
     "test": "node --test"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "concurrently": "^9.2.1"
   },
   "engines": {

@@ -1,3 +1,4 @@
+import {initCommerce} from './commerce.js'
 import {initDesign} from './design.js'
 import pg from 'pg'
 import {initMediaSchema} from './mediaSchema.js'
@@ -62,6 +63,7 @@ export async function initDatabase() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`)
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(100) NOT NULL DEFAULT ''`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0)`)
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''`)
@@ -83,6 +85,7 @@ export async function initDatabase() {
       await pool.query('INSERT INTO products (name,category,price,description) VALUES ($1,$2,$3,$4)',[name,category,price,description])
   }
   await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
+  await initCommerce(pool)
   await initDesign(pool)
   await initMediaSchema(pool)
 }

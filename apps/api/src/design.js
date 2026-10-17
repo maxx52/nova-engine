@@ -3,6 +3,8 @@ export async function initDesign(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS site_design (id INTEGER PRIMARY KEY CHECK(id=1),draft JSONB NOT NULL,published JSONB NOT NULL,revision BIGINT NOT NULL DEFAULT 1,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
  await pool.query(`CREATE TABLE IF NOT EXISTS design_versions (id BIGSERIAL PRIMARY KEY,payload JSONB NOT NULL,action VARCHAR(20) NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
  await pool.query('INSERT INTO site_design (id,draft,published) VALUES (1,$1,$1) ON CONFLICT (id) DO NOTHING',[JSON.stringify(defaultDesign)])
+ // Upgrade only untouched demo labels; preserve the owner's custom texts.
+ for(const column of ['draft','published'])for(const [key,old] of [['checkout','Оформление скоро появится'],['cart_note','Демонстрационная корзина — оформление реальных заказов появится позже.']])await pool.query(`UPDATE site_design SET ${column}=jsonb_set(${column},$1,$2::jsonb) WHERE ${column}->'texts'->>$3=$4`,[['texts',key],JSON.stringify(defaultDesign.texts[key]),key,old])
 }
 const revision=value=>typeof value==='string'&&/^[1-9][0-9]{0,17}$/.test(value)
 export function registerDesign(app,pool,requireAdmin){
