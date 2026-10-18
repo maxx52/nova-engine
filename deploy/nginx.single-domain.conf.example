@@ -1,0 +1,56 @@
+# Example for an existing nginx/hosting panel, inside http {}.
+# Replace domain, certificate and paths. Keep the repository outside public/.
+# Copy storefront/dist contents to /srv/nova/public/, admin/dist to public/admin/.
+# API: NODE_ENV=production API_HOST=127.0.0.1 PORT=3001
+# ADMIN_ORIGINS=https://shop.example.ru SESSION_SECURE=true TRUST_PROXY=loopback
+# Snippets below use 127.0.0.1:3001. Adapt copies if your API port differs.
+# Do not replace another site's configuration. Verify with nginx -t before reload.
+
+server {
+    listen 80;
+    server_name shop.example.ru;
+    return 301 https://shop.example.ru$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name shop.example.ru;
+    ssl_certificate /etc/letsencrypt/live/shop.example.ru/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/shop.example.ru/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    root /srv/nova/public;
+    include /srv/nova/app/deploy/security-headers.conf;
+    client_max_body_size 6m;
+    client_body_timeout 15s;
+    client_header_timeout 10s;
+
+    location ~ /\. { return 404; }
+    location = /api/code-frame {
+        include /srv/nova/app/deploy/code-frame-proxy.conf;
+    }
+    location = /api/payment-frame {
+        include /srv/nova/app/deploy/code-frame-proxy.conf;
+    }
+    location /api/ {
+        # Authorization and CSRF are enforced by Node.js. Public checkout,
+        # analytics and contact forms also need POST on this same origin.
+        include /srv/nova/app/deploy/api-proxy.conf;
+    }
+    location /uploads/ {
+        limit_except GET HEAD { deny all; }
+        include /srv/nova/app/deploy/public-media-proxy.conf;
+    }
+    location = /admin { return 308 /admin/; }
+    location /admin/ {
+        # An add_header here replaces inherited headers on common nginx versions.
+        include /srv/nova/app/deploy/security-headers.conf;
+        add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri $uri/ /admin/index.html;
+    }
+    location / {
+        include /srv/nova/app/deploy/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri $uri/ /index.html;
+    }
+}
