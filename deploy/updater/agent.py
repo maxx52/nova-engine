@@ -221,18 +221,38 @@ class Manager:
         version(value)
         return value
 
-    def run(self, args, *, cwd=None, output=None, incoming=None, capture=False, timeout=180):
+    def run(self, args, *, cwd=None, output=None, incoming=None, capture=False, timeout=180, allow_failure=False):
         log_path = self.root / 'worker.log'
         if log_path.exists() and log_path.stat().st_size > 2 * 1024 * 1024:
             log_path.write_text('')
         with open(log_path, 'ab') as log:
             result = subprocess.run(args, cwd=cwd, stdin=incoming, stdout=subprocess.PIPE if capture else output or log, stderr=log, timeout=timeout, env={'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root', 'LANG': 'C.UTF-8'})
-        if result.returncode:
+        if result.returncode and not allow_failure:
             raise Failure('Команда не завершилась успешно: ' + pathlib.Path(args[0]).name + '. Подробности доступны администратору сервера.')
         if capture:
             if len(result.stdout) > 100000:
                 raise Failure('Слишком большой ответ команды')
             return result.stdout.decode().strip()
+
+    def run_unprivileged(self, args, cwd, timeout=600):
+        # PID 1 applies credentials; the protected manager never needs to call
+        # setuid itself. A separate cgroup and read-only filesystem also contain
+        # any dependency/helper descendants, including after a manager crash.
+        unit = 'nova-prepare-' + uuid.uuid4().hex
+        command = ['systemd-run', '--wait', '--pipe', '--collect', '--quiet',
+                   '--unit=' + unit, '--uid=' + self.config['app_user'],
+                   '--gid=' + self.config['app_group'], '--working-directory=' + str(cwd),
+                   '--property=NoNewPrivileges=yes', '--property=ProtectSystem=strict',
+                   '--property=ProtectHome=yes', '--property=PrivateTmp=yes',
+                   '--property=ReadWritePaths=' + str(cwd), '--property=UMask=0077',
+                   '--property=KillMode=control-group', '--property=RuntimeMaxSec=' + str(timeout),
+                   '--property=MemoryMax=384M', '--property=CPUQuota=60%',
+                   '--setenv=HOME=' + str(cwd), '--setenv=PATH=/usr/local/bin:/usr/bin:/bin', '--', *args]
+        try:
+            return self.run(command, timeout=timeout + 10)
+        finally:
+            # --collect may already have removed a successful unit.
+            self.run(['systemctl', 'stop', unit], timeout=30, allow_failure=True)
 
     def db_command(self, command, *args, incoming=None, output=None, capture=False):
         return self.run(['docker', 'exec', '-i', self.config['db_container'], command, '-U', self.config['db_admin'], *args], incoming=incoming, output=output, capture=capture, timeout=300)
@@ -500,8 +520,8 @@ class Manager:
         os.chmod(folder, 0o755)
         self.chown_runtime(app)
         self.phase('dependencies')
-        self.run(['runuser', '-u', self.config['app_user'], '--', 'npm', 'ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', str(app / '.npm-cache')], cwd=app, timeout=600)
-        self.run(['runuser', '-u', self.config['app_user'], '--', 'node', '--input-type=module', '-e', "import sharp from 'sharp';await sharp({create:{width:1,height:1,channels:3,background:'#fff'}}).png().toBuffer()"], cwd=app)
+        self.run_unprivileged(['npm', 'ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', str(app / '.npm-cache')], cwd=app, timeout=600)
+        self.run_unprivileged(['node', '--input-type=module', '-e', "import sharp from 'sharp';await sharp({create:{width:1,height:1,channels:3,background:'#fff'}}).png().toBuffer()"], cwd=app, timeout=120)
         shutil.rmtree(app / '.npm-cache', ignore_errors=True)
         self.freeze_tree(app)
         self.verify_release_files(archive, app)
@@ -564,6 +584,10 @@ class Manager:
                 self.persist()
                 return {'schedule': copy.deepcopy(self.state['schedule'])}
             job = {'id': uuid.uuid4().hex, 'kind': body['kind'], 'started_at': now(), 'phase': 'queued', 'status': 'running', 'recovery_snapshot': None}
+            if body['kind'] == 'update':
+                job['version'] = body['version']
+            if body['kind'] in ('restore', 'verify'):
+                job['backup_id'] = body['backup_id']
             self.state['active'] = job
             self.persist()
             threading.Thread(target=self.perform, args=(copy.deepcopy(body),), daemon=True).start()

@@ -165,6 +165,18 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(a.LocalServer.verify_request(Server(), Request(991), ''))
         self.assertFalse(a.LocalServer.verify_request(Server(), Request(992), ''))
 
+    def test_dependency_preparation_uses_a_bounded_unprivileged_systemd_unit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = Fixture(directory)
+            manager.run_unprivileged(['npm', 'ci', '--ignore-scripts'], manager.app, timeout=600)
+            command = manager.events[0]
+            self.assertEqual(command[0], 'systemd-run')
+            self.assertIn('--uid=nova', command)
+            self.assertIn('--property=ProtectSystem=strict', command)
+            self.assertIn('--property=ReadWritePaths=' + str(manager.app), command)
+            self.assertIn('--property=RuntimeMaxSec=600', command)
+            self.assertEqual(manager.events[-1][:2], ['systemctl', 'stop'])
+
     def test_backup_is_complete_private_verified_and_does_not_expose_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
             manager = Fixture(directory)
