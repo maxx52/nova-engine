@@ -33,6 +33,7 @@ jobs:
           if bash scripts/install.sh --resume --domain shop.example.ru; then exit 1; fi
       - name: Start disposable production containers
         run: |
+          set -o pipefail
           umask 077
           printf 'NOVA_DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\nNOVA_DB_PASSWORD=%s\nADMIN_API_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
           docker compose --env-file .env -f deploy/docker/compose.yaml config --quiet
