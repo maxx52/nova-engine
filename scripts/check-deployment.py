@@ -14,12 +14,12 @@ base = 'https://localhost'
 
 def request(path, data=None, expected=200):
     body = None if data is None else json.dumps(data).encode()
-    req = urllib.request.Request(base + path, data=body, headers={'Content-Type': 'application/json', 'Origin': base})
+    req = urllib.request.Request(base + path, data=body, headers={'Content-Type': 'application/json', 'Origin': base, 'X-Nova-Request': '1'})
     try:
         response = client.open(req, timeout=20)
     except urllib.error.HTTPError as error:
         response = error
-    assert response.code == expected, (path, response.code, response.read()[:100])
+    assert response.code == expected, (path, response.code, expected)
     return response, response.read()
 
 
