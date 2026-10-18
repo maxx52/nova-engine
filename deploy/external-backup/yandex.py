@@ -97,7 +97,7 @@ def validate_token(value):
         raise Failure('Некорректный токен авторизации')
     token = json.loads(value)
     allowed = {'access_token', 'token_type', 'refresh_token', 'expiry', 'expires_in'}
-    if not isinstance(token, dict) or set(token) - allowed or not isinstance(token.get('access_token'), str) or not token['access_token'] or str(token.get('token_type', '')).lower() != 'bearer':
+    if not isinstance(token, dict) or set(token) - allowed or not isinstance(token.get('access_token'), str) or not token['access_token'] or str(token.get('token_type', '')).lower() not in ('bearer', 'oauth'):
         raise Failure('Нужен JSON из rclone authorize yandex')
     return token
 

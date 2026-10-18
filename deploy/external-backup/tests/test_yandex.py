@@ -33,6 +33,10 @@ class ExternalTests(unittest.TestCase):
                 self.assertTrue(config.exists())
 
     def test_token_rejects_wrong_types_or_unexpected_fields(self):
+        for scheme in ['bearer', 'Bearer', 'OAuth', 'oauth']:
+            value = json.dumps({'access_token': 'disposable-token', 'token_type': scheme,
+                                'refresh_token': 'disposable-refresh', 'expiry': '2027-01-01T00:00:00Z'})
+            self.assertEqual(y.validate_token(value)['token_type'], scheme)
         for value in ['[]', '{}', '{"access_token":1,"token_type":"bearer"}', '{"access_token":"dummy","token_type":"basic"}', '{"access_token":"dummy","token_type":"bearer","command":"anything"}']:
             with self.assertRaises(y.Failure):
                 y.validate_token(value)
