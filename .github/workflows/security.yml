@@ -18,6 +18,12 @@ jobs:
       - run: npm audit --audit-level=moderate
       - run: npm test
       - run: python3 -m unittest discover -s deploy/updater/tests -v
+      - run: python3 -m unittest discover -s deploy/external-backup/tests -v
+      - name: Verify encrypted off-site transport with disposable local data
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends rclone
+          python3 scripts/check-external-crypt.py
       - name: Verify protected native preparation on systemd
         run: sudo python3 scripts/check-native-preparation.py "$(id -un)"
       - run: npm run build

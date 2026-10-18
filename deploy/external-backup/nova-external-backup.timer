@@ -1,0 +1,12 @@
+[Unit]
+Description=Send completed NOVA backups off-site every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=15min
+RandomizedDelaySec=30
+Persistent=true
+Unit=nova-external-backup.service
+
+[Install]
+WantedBy=timers.target
