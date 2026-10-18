@@ -36,7 +36,7 @@ jobs:
           umask 077
           printf 'NOVA_DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\nNOVA_DB_PASSWORD=%s\nADMIN_API_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
           docker compose --env-file .env -f deploy/docker/compose.yaml config --quiet
-          docker compose --env-file .env -f deploy/docker/compose.yaml up -d --build --wait --wait-timeout 240
+          docker compose --env-file .env -f deploy/docker/compose.yaml up -d --build --wait --wait-timeout 240 2>&1 | tee /tmp/nova-deploy.log
       - name: Check local TLS, setup, packages and restart persistence
         run: |
           for attempt in $(seq 1 20); do
@@ -51,7 +51,10 @@ jobs:
           NOVA_TEST_RESTART=1 python3 scripts/check-deployment.py
       - name: Diagnostic logs on failure
         if: failure()
-        run: docker compose --env-file .env -f deploy/docker/compose.yaml logs --tail=100 api web db
+        run: |
+          docker compose --env-file .env -f deploy/docker/compose.yaml ps -a
+          tail -n 30 /tmp/nova-deploy.log | python3 -c 'import sys; s=sys.stdin.read(); print("::error title=Build diagnostics::"+s.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          docker compose --env-file .env -f deploy/docker/compose.yaml logs --tail=25 api web db | python3 -c 'import sys; s=sys.stdin.read(); print("::error title=Disposable deployment diagnostics::"+s.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
       - name: Remove disposable containers
         if: always()
         run: docker compose --env-file .env -f deploy/docker/compose.yaml down -v
