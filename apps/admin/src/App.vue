@@ -1,4 +1,5 @@
 <script setup>
+import {PRODUCT_VERSION} from '../../../config/release.js'
 import ThemesWorkspace from './ThemesWorkspace.vue'
 
 import FormsWorkspace from './FormsWorkspace.vue'
@@ -92,7 +93,7 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
     <div class="brand"><span class="brand-icon">N</span><div><strong>NOVA</strong><small>ADMIN PANEL</small></div></div>
     <div class="sidebar-label">УПРАВЛЕНИЕ</div>
     <nav><button v-for="section in sections" :key="section.id" :class="{selected:page===section.id}" @click="navigate(section.id)"><span class="nav-icon">{{section.icon}}</span>{{section.label}}<span v-if="section.id==='products'" class="nav-count">{{products.length}}</span></button></nav>
-    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v0.17 <small>Управление сайтом</small></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span> NOVA Engine v{{PRODUCT_VERSION}} <small>Управление сайтом</small></div>
   </aside>
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Панель управления</span><AccountActions /><div class="avatar">A</div></div></header>

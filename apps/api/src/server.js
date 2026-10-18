@@ -1,3 +1,4 @@
+import {PRODUCT_VERSION} from '../../../config/release.js'
 import {registerThemes} from './themes.js'
 import {registerForms} from './forms.js'
 import {registerPayments} from './payments.js'
@@ -69,7 +70,7 @@ function validateProduct(body) {
 }
 app.get('/health', async () => {
   await pool.query('SELECT 1')
-  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:'0.20.0',database:'connected'}
+  return security.production?{status:'ok'}:{status:'ok',product:'NOVA Engine',version:PRODUCT_VERSION,database:'connected'}
 })
 app.get('/api/products', async (request) => {
   const result = await pool.query('SELECT '+productFields+' FROM products'+(await isAdmin(request)?'':' WHERE published=TRUE')+' ORDER BY id')
