@@ -18,6 +18,8 @@ jobs:
       - run: npm audit --audit-level=moderate
       - run: npm test
       - run: python3 -m unittest discover -s deploy/updater/tests -v
+      - name: Verify protected native preparation on systemd
+        run: sudo python3 scripts/check-native-preparation.py "$(id -un)"
       - run: npm run build
   deployment:
     runs-on: ubuntu-latest
