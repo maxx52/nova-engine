@@ -26,6 +26,8 @@ REMOTE = 'nova-crypt:'
 FOLDER = 'NOVA-Backups/nova.maxxdev.ru'
 IDENTIFIER = re.compile(r'^\d{8}T\d{6}Z-[a-f0-9]{8}$')
 FILES = ('database.dump', 'code.tar.gz', 'web.tar.gz', 'uploads.tar.gz', 'environment')
+VENDOR_BINARY = pathlib.Path('/usr/local/lib/nova-external-backup/rclone')
+RCLONE = str(VENDOR_BINARY) if VENDOR_BINARY.is_file() else '/usr/bin/rclone'
 
 
 class Failure(Exception):
@@ -61,11 +63,12 @@ def run(args, *, incoming=None):
 
 
 def rclone(*args):
-    return run(['/usr/bin/rclone', '--config', str(CONFIG), '--contimeout', '20s',
-                # Yandex WebDAV must accept the PUT before streaming its body.
-                # Without this handshake even small encrypted uploads can stall.
-                '--disable-http2', '--header-upload', 'Expect: 100-continue',
-                '--expect-continue-timeout', '5m', '--timeout', '6m',
+    # Keep legacy WebDAV workarounds away from native REST API requests.
+    webdav = [] if CONFIG == STATE / 'rclone.conf' else [
+        '--disable-http2', '--header-upload', 'Expect: 100-continue',
+        '--expect-continue-timeout', '5m']
+    return run([RCLONE, '--config', str(CONFIG), '--contimeout', '20s',
+                *webdav, '--timeout', '6m',
                 '--retries', '3', '--low-level-retries', '3',
                 '--transfers', '1', '--checkers', '2', '--bwlimit', '4M', *args])
 
@@ -125,6 +128,38 @@ def setup_api():
     enable()
 
 
+def replace_api_token():
+    global CONFIG
+    validate_config()
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(CONFIG)
+    value = getpass.getpass('Токен собственного приложения Яндекса (только access_token, ввод скрыт): ').strip()
+    if not re.fullmatch(r'[A-Za-z0-9._~\-]{20,8192}', value):
+        raise Failure('Вставьте только токен, без URL или JSON')
+    lifetime = input('expires_in в секундах, если указан; иначе Enter: ').strip()
+    token = {'access_token': value, 'token_type': 'OAuth'}
+    if lifetime:
+        if not lifetime.isdigit() or not 0 < int(lifetime) <= 10 * 366 * 86400:
+            raise Failure('Некорректный срок действия')
+        token['expiry'] = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=int(lifetime))).isoformat()
+    # A manually issued token has no refresh token. Its lifetime is enforced by
+    # Yandex; do not invent a future expiry or reuse another client's refresh.
+    parser['yandex'] = {'type': 'yandex', 'token': json.dumps(token)}
+    destination = STATE / 'rclone.conf'
+    temporary = destination.with_suffix('.next')
+    with open(temporary, 'x') as handle:
+        os.chmod(temporary, 0o600)
+        parser.write(handle)
+    os.replace(temporary, destination)
+    CONFIG = destination
+    status = json.loads((STATE / 'status.json').read_text()) if (STATE / 'status.json').exists() else {}
+    status.update(token_renewal='manual', token_expiry=token.get('expiry'), transport='api')
+    atomic(STATE / 'status.json', status)
+    del value, token
+    probe()
+    enable()
+
+
 def inspect(path):
     if path.is_symlink() or not path.is_dir() or not IDENTIFIER.fullmatch(path.name):
         raise Failure('Некорректный каталог копии')
@@ -146,7 +181,7 @@ def inspect(path):
 
 
 def obscure(value):
-    return run(['/usr/bin/rclone', 'obscure', '-'], incoming=value.encode()).decode().strip()
+    return run([RCLONE, 'obscure', '-'], incoming=value.encode()).decode().strip()
 
 
 def setup():
@@ -250,7 +285,7 @@ def sync():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['setup', 'setup-api', 'test', 'sync', 'status'])
+    parser.add_argument('command', choices=['setup', 'setup-api', 'replace-api-token', 'test', 'sync', 'status'])
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise Failure('Запустите от root через sudo')
@@ -268,6 +303,8 @@ def main():
             setup()
         elif args.command == 'setup-api':
             setup_api()
+        elif args.command == 'replace-api-token':
+            replace_api_token()
         elif args.command == 'test':
             probe()
             enable()

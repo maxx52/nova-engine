@@ -12,6 +12,30 @@ spec.loader.exec_module(y)
 
 
 class ExternalTests(unittest.TestCase):
+    def test_manual_own_app_token_preserves_crypt_and_never_invents_refresh(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            state = root / 'state'
+            state.mkdir()
+            config = state / 'rclone.conf'
+            config.write_text('[yandex]\ntype = yandex\ntoken = {"access_token":"old-disposable","token_type":"OAuth","refresh_token":"old-refresh"}\n[nova-crypt]\ntype = crypt\nremote = yandex:' + y.FOLDER + '\nfilename_encryption = standard\ndirectory_name_encryption = true\npassword = same-crypt-password\n')
+            with patch.object(y, 'STATE', state), patch.object(y, 'CONFIG', config), patch.object(y, 'private'), patch.object(y.getpass, 'getpass', return_value='y0_disposable_own_app_token_12345'), patch('builtins.input', return_value=''), patch.object(y, 'probe'), patch.object(y, 'enable'):
+                y.replace_api_token()
+                y.validate_config()
+                result = config.read_text()
+                self.assertIn('same-crypt-password', result)
+                self.assertNotIn('old-refresh', result)
+                self.assertNotIn('expiry', result)
+                self.assertNotIn('refresh_token', result)
+                status = (state / 'status.json').read_text()
+                self.assertNotIn('y0_disposable', status)
+                self.assertEqual(json.loads(status)['token_renewal'], 'manual')
+
+    def test_native_transport_does_not_inherit_webdav_upload_headers(self):
+        with patch.object(y, 'CONFIG', y.STATE / 'rclone.conf'), patch.object(y, 'run', return_value=b'') as run:
+            y.rclone('copy', '/private/staging', 'nova-crypt:backup')
+        self.assertNotIn('--header-upload', run.call_args.args[0])
+
     def test_native_oauth_migration_preserves_crypt_secret_and_folder(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
