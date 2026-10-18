@@ -17,6 +17,7 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=moderate
       - run: npm test
+      - run: python3 -m unittest discover -s deploy/updater/tests -v
       - run: npm run build
   deployment:
     runs-on: ubuntu-latest
@@ -50,6 +51,9 @@ jobs:
           docker compose --env-file .env -f deploy/docker/compose.yaml restart api db
           docker compose --env-file .env -f deploy/docker/compose.yaml up -d --wait --wait-timeout 240
           NOVA_TEST_RESTART=1 python3 scripts/check-deployment.py
+          python3 scripts/check-manager-deployment.py
+          npm install --prefix /tmp/nova-ui-test --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+          NOVA_PLAYWRIGHT_MODULE=/tmp/nova-ui-test/node_modules/playwright-core/index.mjs node scripts/check-system-ui.mjs
       - name: Diagnostic logs on failure
         if: failure()
         run: |

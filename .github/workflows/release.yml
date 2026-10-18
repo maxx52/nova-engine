@@ -1,0 +1,42 @@
+name: Publish stable release
+on:
+  workflow_run:
+    workflows: [Security and build]
+    types: [completed]
+    branches: [release/**]
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Validate release branch and version
+        env:
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          node --input-type=module -e "import fs from 'node:fs';const r=JSON.parse(fs.readFileSync('config/release.json'));if(process.env.RELEASE_BRANCH!=='release/v'+r.version)throw Error('Release branch does not match product version')"
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm test
+      - run: python3 -m unittest discover -s deploy/updater/tests -v
+      - run: npm run build -w @nova/storefront && npm run build -w @nova/admin -- --base=/admin/
+      - run: node scripts/build-release.mjs /tmp/nova-release
+      - name: Publish versioned release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          VERSION=$(node --input-type=module -e "import fs from 'node:fs';console.log(JSON.parse(fs.readFileSync('config/release.json')).version)")
+          gh release create "v$VERSION" "/tmp/nova-release/nova-$VERSION.tar.gz" /tmp/nova-release/nova-release.json --target "$RELEASE_SHA" --title "NOVA Engine $VERSION" --notes-file "docs/releases/$VERSION.md" --latest

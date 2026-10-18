@@ -1,0 +1,28 @@
+[Unit]
+Description=NOVA local update and backup manager
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/nova-updater/agent.py --config /etc/nova/updater.json
+Restart=on-failure
+RestartSec=5
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/etc/nova
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+LimitNOFILE=1024
+TasksMax=160
+MemoryMax=512M
+CPUQuota=60%
+[Install]
+WantedBy=multi-user.target

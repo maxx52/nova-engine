@@ -1,3 +1,4 @@
+import {registerSystem} from './system.js'
 import {PRODUCT_VERSION} from '../../../config/release.js'
 import {registerThemes} from './themes.js'
 import {registerForms} from './forms.js'
@@ -40,6 +41,7 @@ registerMedia(app,pool,requireAdmin,uploadDirectory)
 registerPages(app, pool, requireAdmin)
 registerDesign(app,pool,requireAdmin)
 registerThemes(app,pool,requireAdmin)
+registerSystem(app,requireAdmin)
 registerCodeFrame(app)
 registerSettings(app, pool, requireAdmin)
 registerBlog(app, pool, requireAdmin)

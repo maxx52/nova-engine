@@ -8,3 +8,7 @@ dist/
 
 # Product image uploads (local development)
 uploads/
+
+# Python management tools
+__pycache__/
+*.pyc

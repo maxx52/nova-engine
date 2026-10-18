@@ -19,6 +19,8 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     server_tokens off;
     root /srv/nova/public;
+    # Enable only after connecting the local update manager.
+    if (-f /srv/nova/public/.nova-maintenance) { return 503; }
     include /srv/nova/app/deploy/security-headers.conf;
     client_max_body_size 6m;
     client_body_timeout 15s;

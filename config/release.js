@@ -1,2 +1,2 @@
-// Public product release, shared by the administrative UI and API.
-export const PRODUCT_VERSION = '0.20.0'
+import release from './release.json' with {type:'json'}
+export const PRODUCT_VERSION = release.version

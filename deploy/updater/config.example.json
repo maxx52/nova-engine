@@ -1,0 +1,19 @@
+{
+  "app_dir": "/srv/nova/app",
+  "web_dir": "/www/wwwroot/nova.maxxdev.ru",
+  "uploads_dir": "/var/lib/nova/uploads",
+  "env_file": "/etc/nova/api.env",
+  "state_dir": "/var/lib/nova-updater",
+  "backup_dir": "/var/backups/nova-system",
+  "staging_dir": "/srv/nova-updates",
+  "socket": "/run/nova-updater/agent.sock",
+  "service": "nova-test-api",
+  "db_container": "nova-test-postgres",
+  "db_admin": "postgres",
+  "db_role": "nova_app",
+  "db_name": "nova_test",
+  "app_user": "nova",
+  "app_group": "nova",
+  "health_url": "http://127.0.0.1:3101/health",
+  "revision_file": "/srv/nova/REVISION"
+}
