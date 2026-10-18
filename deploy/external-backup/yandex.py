@@ -16,8 +16,11 @@ import stat
 import subprocess
 import tempfile
 
-CONFIG = pathlib.Path('/etc/nova/yandex-rclone.conf')
 STATE = pathlib.Path('/var/lib/nova-external-backup')
+LEGACY_CONFIG = pathlib.Path('/etc/nova/yandex-rclone.conf')
+# Native OAuth refresh updates this root-only config atomically inside writable
+# private state. The service must never need write access to the CMS env folder.
+CONFIG = STATE / 'rclone.conf' if (STATE / 'rclone.conf').exists() else LEGACY_CONFIG
 BACKUPS = pathlib.Path('/var/backups/nova-system')
 REMOTE = 'nova-crypt:'
 FOLDER = 'NOVA-Backups/nova.maxxdev.ru'
@@ -72,7 +75,8 @@ def validate_config():
     parser = configparser.ConfigParser(interpolation=None)
     parser.read(CONFIG)
     # Refuse unencrypted remotes, exec hooks and alternate destinations.
-    expected = {'yandex': {'type', 'url', 'vendor', 'user', 'pass'},
+    native = parser.has_section('yandex') and parser['yandex'].get('type') == 'yandex'
+    expected = {'yandex': {'type', 'token'} if native else {'type', 'url', 'vendor', 'user', 'pass'},
                 'nova-crypt': {'type', 'remote', 'filename_encryption', 'directory_name_encryption', 'password'}}
     if set(parser.sections()) != set(expected) or parser.defaults():
         raise Failure('Неожиданная конфигурация внешнего хранилища')
@@ -80,10 +84,45 @@ def validate_config():
         if set(parser[section]) != keys:
             raise Failure('Неожиданные параметры внешнего хранилища')
     a, b = parser['yandex'], parser['nova-crypt']
-    if (a['type'], a['url'], a['vendor']) != ('webdav', 'https://webdav.yandex.ru', 'other') or not a['user'] or not a['pass']:
+    if native:
+        validate_token(a['token'])
+    elif (a['type'], a['url'], a['vendor']) != ('webdav', 'https://webdav.yandex.ru', 'other') or not a['user'] or not a['pass']:
         raise Failure('Требуется WebDAV Яндекс Диска')
     if (b['type'], b['remote'], b['filename_encryption'], b['directory_name_encryption']) != ('crypt', 'yandex:' + FOLDER, 'standard', 'true') or not b['password']:
         raise Failure('Требуется шифрование содержимого и имён файлов')
+
+
+def validate_token(value):
+    if not isinstance(value, str) or len(value) > 32768:
+        raise Failure('Некорректный токен авторизации')
+    token = json.loads(value)
+    allowed = {'access_token', 'token_type', 'refresh_token', 'expiry', 'expires_in'}
+    if not isinstance(token, dict) or set(token) - allowed or not isinstance(token.get('access_token'), str) or not token['access_token'] or str(token.get('token_type', '')).lower() != 'bearer':
+        raise Failure('Нужен JSON из rclone authorize yandex')
+    return token
+
+
+def setup_api():
+    global CONFIG
+    destination = STATE / 'rclone.conf'
+    if destination.exists():
+        raise Failure('API уже настроен. Используйте test или status')
+    # Preserve the existing crypt password exactly; it is never printed or sent
+    # to Yandex. This command changes transport, not encryption or destination.
+    validate_config()
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(CONFIG)
+    value = getpass.getpass('Вставьте JSON из rclone authorize yandex (ввод скрыт): ')
+    token = validate_token(value)
+    parser['yandex'] = {'type': 'yandex', 'token': json.dumps(token)}
+    temporary = destination.with_suffix('.next')
+    with open(temporary, 'x') as handle:
+        os.chmod(temporary, 0o600)
+        parser.write(handle)
+    os.replace(temporary, destination)
+    CONFIG = destination
+    probe()
+    enable()
 
 
 def inspect(path):
@@ -151,7 +190,10 @@ def probe():
         if rclone('cat', destination) != file.read_bytes():
             raise Failure('Проверка расшифрования не прошла')
     # A fixed 64-byte encrypted probe is intentionally kept; no remote deletions.
-    atomic(STATE / 'status.json', {'configured': True, 'provider': 'yandex', 'tested_at': now()})
+    status = json.loads((STATE / 'status.json').read_text()) if (STATE / 'status.json').exists() else {}
+    status.update(configured=True, provider='yandex', tested_at=now(),
+                  transport='api' if CONFIG == STATE / 'rclone.conf' else 'webdav', error=None)
+    atomic(STATE / 'status.json', status)
 
 
 def sync():
@@ -208,7 +250,7 @@ def sync():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['setup', 'test', 'sync', 'status'])
+    parser.add_argument('command', choices=['setup', 'setup-api', 'test', 'sync', 'status'])
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise Failure('Запустите от root через sudo')
@@ -224,6 +266,8 @@ def main():
             raise Failure('Внешнее копирование уже выполняется') from None
         if args.command == 'setup':
             setup()
+        elif args.command == 'setup-api':
+            setup_api()
         elif args.command == 'test':
             probe()
             enable()

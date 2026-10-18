@@ -12,6 +12,31 @@ spec.loader.exec_module(y)
 
 
 class ExternalTests(unittest.TestCase):
+    def test_native_oauth_migration_preserves_crypt_secret_and_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            state = root / 'state'
+            state.mkdir()
+            config = root / 'legacy.conf'
+            config.write_text('[yandex]\ntype = webdav\nurl = https://webdav.yandex.ru\nvendor = other\nuser = dummy\npass = fake-obscured\n[nova-crypt]\ntype = crypt\nremote = yandex:' + y.FOLDER + '\nfilename_encryption = standard\ndirectory_name_encryption = true\npassword = unchanged-crypt-secret\n')
+            with patch.object(y, 'CONFIG', config), patch.object(y, 'STATE', state), patch.object(y, 'private'), patch.object(y.getpass, 'getpass', return_value='{"access_token":"disposable-token","token_type":"bearer"}'), patch.object(y, 'probe') as probe, patch.object(y, 'enable') as enable:
+                y.setup_api()
+                y.validate_config()
+                text = y.CONFIG.read_text()
+                self.assertIn('password = unchanged-crypt-secret', text)
+                self.assertIn('remote = yandex:' + y.FOLDER, text)
+                self.assertIn('type = yandex', text)
+                self.assertNotIn('fake-obscured', text)
+                self.assertEqual(y.CONFIG.stat().st_mode & 0o777, 0o600)
+                probe.assert_called_once()
+                enable.assert_called_once()
+                self.assertTrue(config.exists())
+
+    def test_token_rejects_wrong_types_or_unexpected_fields(self):
+        for value in ['[]', '{}', '{"access_token":1,"token_type":"bearer"}', '{"access_token":"dummy","token_type":"basic"}', '{"access_token":"dummy","token_type":"bearer","command":"anything"}']:
+            with self.assertRaises(y.Failure):
+                y.validate_token(value)
+
     def test_transport_waits_for_yandex_to_accept_the_upload(self):
         with patch.object(y, 'run', return_value=b'') as run:
             y.rclone('copy', '/private/staging', 'nova-crypt:backup')
