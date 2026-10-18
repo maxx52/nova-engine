@@ -18,3 +18,40 @@ jobs:
       - run: npm audit --audit-level=moderate
       - run: npm test
       - run: npm run build
+  deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Validate installer and invalid input handling
+        run: |
+          bash -n scripts/install.sh
+          bash scripts/install.sh --help
+          if bash scripts/install.sh --domain 'bad;domain'; then exit 1; fi
+          if bash scripts/install.sh --resume --domain shop.example.ru; then exit 1; fi
+      - name: Start disposable production containers
+        run: |
+          umask 077
+          printf 'NOVA_DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\nNOVA_DB_PASSWORD=%s\nADMIN_API_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+          docker compose --env-file .env -f deploy/docker/compose.yaml config --quiet
+          docker compose --env-file .env -f deploy/docker/compose.yaml up -d --build --wait --wait-timeout 240
+      - name: Check local TLS, setup, packages and restart persistence
+        run: |
+          for attempt in $(seq 1 20); do
+            if docker compose --env-file .env -f deploy/docker/compose.yaml cp web:/data/caddy/pki/authorities/local/root.crt /tmp/nova-ca.crt; then break; fi
+            sleep 2
+          done
+          export NOVA_TEST_CA=/tmp/nova-ca.crt
+          export ADMIN_API_KEY="$(sed -n 's/^ADMIN_API_KEY=//p' .env)"
+          python3 scripts/check-deployment.py
+          docker compose --env-file .env -f deploy/docker/compose.yaml restart api db
+          docker compose --env-file .env -f deploy/docker/compose.yaml up -d --wait --wait-timeout 240
+          NOVA_TEST_RESTART=1 python3 scripts/check-deployment.py
+      - name: Diagnostic logs on failure
+        if: failure()
+        run: docker compose --env-file .env -f deploy/docker/compose.yaml logs --tail=100 api web db
+      - name: Remove disposable containers
+        if: always()
+        run: docker compose --env-file .env -f deploy/docker/compose.yaml down -v

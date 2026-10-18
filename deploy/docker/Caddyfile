@@ -1,0 +1,40 @@
+{$NOVA_DOMAIN} {
+    encode zstd gzip
+    request_body {
+        max_size 6MB
+    }
+    @hidden path_regexp hidden (^|/)\.
+    respond @hidden 404
+    @backend path /api/* /uploads/*
+    handle @backend {
+        reverse_proxy api:3001 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+    handle {
+        header {
+            Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+            X-Content-Type-Options nosniff
+            X-Frame-Options DENY
+            Referrer-Policy no-referrer
+            Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+            Cross-Origin-Resource-Policy same-origin
+            Strict-Transport-Security max-age=31536000
+            Cache-Control no-cache
+            -Server
+        }
+        redir /admin /admin/ 308
+        handle /admin/* {
+            header X-Robots-Tag "noindex, nofollow, noarchive"
+            root * /srv/www
+            try_files {path} /admin/index.html
+            file_server
+        }
+        handle {
+            root * /srv/www/storefront
+            try_files {path} /index.html
+            file_server
+        }
+    }
+}
