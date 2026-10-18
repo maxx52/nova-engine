@@ -104,11 +104,17 @@ def safe_extract(archive, destination, allow_links=False):
                 raise Failure('Путь выходит за пределы архива')
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
+                if target != destination:
+                    os.chmod(target, 0o755)
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with source.extractfile(member) as incoming, open(target, 'xb') as outgoing:
                     shutil.copyfileobj(incoming, outgoing)
                 os.chmod(target, 0o755 if member.mode & 0o111 else 0o644)
+        # Normalize intermediate directories too, independently of daemon umask.
+        for folder, directories, _ in os.walk(destination, followlinks=False):
+            for name in directories:
+                os.chmod(pathlib.Path(folder) / name, 0o755)
         # No files are written after links are installed.
         for member in members:
             if member.issym():
@@ -332,7 +338,28 @@ class Manager:
         (self.web / '.nova-maintenance').write_text('NOVA maintenance\n')
         self.run(['systemctl', 'stop', self.config['service']])
 
+    def assert_public_files(self):
+        for relative in ('index.html', 'admin/index.html'):
+            file = self.web / relative
+            if not file.is_file() or not file.stat().st_mode & 0o004:
+                raise Failure('Публичные HTML-файлы недоступны веб-серверу')
+            for parent in (file.parent, *file.parent.parents):
+                if parent == self.web.parent:
+                    break
+                if not parent.stat().st_mode & 0o001:
+                    raise Failure('Каталоги интерфейсов недоступны веб-серверу')
+            for asset in re.findall(r'(?:src|href)="(/(?:admin/)?assets/[^"?#]+)"', file.read_text()):
+                target = self.web / asset.lstrip('/')
+                if not inside(self.web, target) or not target.is_file() or not target.stat().st_mode & 0o004:
+                    raise Failure('Файлы сборки отсутствуют или недоступны веб-серверу')
+                for parent in target.parents:
+                    if parent == self.web.parent:
+                        break
+                    if not parent.stat().st_mode & 0o001:
+                        raise Failure('Каталог assets недоступен веб-серверу')
+
     def resume(self):
+        self.assert_public_files()
         self.run(['systemctl', 'start', self.config['service']])
         last = None
         for _ in range(40):
@@ -468,12 +495,14 @@ class Manager:
                     shutil.copytree(source, target)
                 elif source.exists():
                     shutil.copyfile(source, target)
+                    os.chmod(target, 0o644)
             temporary = self.environment.with_name(self.environment.name + '.restore')
             shutil.copyfile(path / 'environment', temporary)
             os.chmod(temporary, row['environment_mode'])
             os.chown(temporary, row['environment_uid'], row['environment_gid'])
             os.replace(temporary, self.environment)
             pathlib.Path(self.config['revision_file']).write_text('restored:' + identifier + '\n')
+        self.assert_public_files()
         self.resume()
 
     def get_release(self, requested, folder):
@@ -553,10 +582,13 @@ class Manager:
         # Assets first; index files atomically after all dependencies are present.
         for source, destination in ((self.app / 'apps/storefront/dist', self.web), (self.app / 'apps/admin/dist', self.web / 'admin')):
             destination.mkdir(parents=True, exist_ok=True)
+            os.chmod(destination, 0o755)
             shutil.copytree(source / 'assets', destination / 'assets', dirs_exist_ok=True)
             temporary = destination / 'index.html.next'
             shutil.copyfile(source / 'index.html', temporary)
+            os.chmod(temporary, 0o644)
             os.replace(temporary, destination / 'index.html')
+        self.assert_public_files()
         self.phase('health')
         self.resume()
 

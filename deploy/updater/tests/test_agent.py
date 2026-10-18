@@ -177,6 +177,36 @@ class AgentTests(unittest.TestCase):
             self.assertIn('--property=RuntimeMaxSec=600', command)
             self.assertEqual(manager.events[-1][:2], ['systemctl', 'stop'])
 
+    def test_public_files_and_restore_remain_readable_under_private_daemon_umask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = Fixture(directory)
+            previous_umask = os.umask(0o077)
+            try:
+                job = manager.execute({'kind': 'update', 'version': '0.21.0'})
+                self.assertEqual(job['status'], 'succeeded', job)
+                self.assertEqual((manager.web / 'index.html').stat().st_mode & 0o777, 0o644)
+                self.assertEqual((manager.web / 'admin/index.html').stat().st_mode & 0o777, 0o644)
+                old = manager.list_backups()[0]['id']
+                job = manager.execute({'kind': 'restore', 'backup_id': old, 'confirm': 'ВОССТАНОВИТЬ'})
+                self.assertEqual(job['status'], 'succeeded', job)
+                manager.assert_public_files()
+                self.assertEqual((manager.web / 'admin').stat().st_mode & 0o777, 0o755)
+                self.assertEqual((manager.web / 'assets').stat().st_mode & 0o777, 0o755)
+            finally:
+                os.umask(previous_umask)
+
+    def test_private_or_missing_static_build_prevents_a_healthy_deployment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = Fixture(directory)
+            manager.assert_public_files()
+            (manager.web / 'index.html').chmod(0o600)
+            with self.assertRaises(a.Failure):
+                manager.assert_public_files()
+            (manager.web / 'index.html').chmod(0o644)
+            (manager.web / 'index.html').write_text('<script src="/assets/missing.js"></script>')
+            with self.assertRaises(a.Failure):
+                manager.assert_public_files()
+
     def test_backup_is_complete_private_verified_and_does_not_expose_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
             manager = Fixture(directory)
