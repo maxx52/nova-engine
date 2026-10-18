@@ -3,6 +3,8 @@
 .git
 .env
 .env.*
+setup-key
+.nova-install
 uploads
 *.log
 **/test

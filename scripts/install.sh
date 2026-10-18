@@ -22,7 +22,7 @@ done
 if ((resume)); then
   [[ -z "$domain" ]] || die '--resume cannot change the domain'
 else
-  [[ ${#domain} -le 253 && "$domain" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || die 'Use a lowercase DNS domain, without https://, paths or ports (IDN: punycode)'
+  [[ ${#domain} -le 253 && "$domain" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+([a-z]{2,63}|xn--[a-z0-9-]{2,59})$ ]] || die 'Use a lowercase DNS domain, without https://, paths or ports (IDN: punycode)'
 fi
 [[ $EUID == 0 ]] || die 'Run using sudo or as root'
 [[ -f /etc/os-release ]] || die 'Supported systems: Ubuntu 22.04/24.04, Debian 12/13'
