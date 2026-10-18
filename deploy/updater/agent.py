@@ -375,6 +375,48 @@ class Manager:
     def chown_runtime(self, path):
         self.run(['chown', '-R', '--no-dereference', self.config['app_user'] + ':' + self.config['app_group'], str(path)])
 
+    def freeze_tree(self, path):
+        # Promoted application/public files must never retain setuid or writable
+        # ownership from the unprivileged dependency installation step.
+        self.run(['chown', '-R', '--no-dereference', 'root:root', str(path)])
+        os.chmod(path, 0o755)
+        for folder, directories, files in os.walk(path, followlinks=False):
+            for name in directories + files:
+                file = pathlib.Path(folder) / name
+                info = file.lstat()
+                if stat.S_ISLNK(info.st_mode):
+                    if not inside(path, file):
+                        raise Failure('Ссылка в зависимостях выходит за пределы приложения')
+                elif stat.S_ISDIR(info.st_mode):
+                    os.chmod(file, 0o755)
+                elif stat.S_ISREG(info.st_mode):
+                    os.chmod(file, 0o755 if info.st_mode & 0o111 else 0o644)
+                else:
+                    raise Failure('Неподдерживаемый файл в приложении')
+
+    def verify_release_files(self, archive, app):
+        expected = set()
+        with tarfile.open(archive, 'r:gz') as source:
+            for member in source.getmembers():
+                if not member.isfile():
+                    continue
+                relative = pathlib.PurePosixPath(member.name)
+                expected.add(str(relative))
+                actual = app / relative
+                if actual.is_symlink() or not actual.is_file():
+                    raise Failure('Файл релиза заменён во время подготовки')
+                value = hashlib.sha256()
+                with source.extractfile(member) as incoming:
+                    for chunk in iter(lambda: incoming.read(1024 * 1024), b''):
+                        value.update(chunk)
+                if digest(actual) != value.hexdigest():
+                    raise Failure('Код релиза изменился во время установки зависимостей')
+        for folder, _, files in os.walk(app, followlinks=False):
+            for name in files:
+                relative = (pathlib.Path(folder) / name).relative_to(app)
+                if 'node_modules' not in relative.parts and str(relative) not in expected:
+                    raise Failure('В подготовленном релизе появились посторонние файлы')
+
     def restore(self, identifier):
         path, row = self.inspect_backup(identifier)
         if not row['verified']:
@@ -461,13 +503,18 @@ class Manager:
         self.run(['runuser', '-u', self.config['app_user'], '--', 'npm', 'ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', str(app / '.npm-cache')], cwd=app, timeout=600)
         self.run(['runuser', '-u', self.config['app_user'], '--', 'node', '--input-type=module', '-e', "import sharp from 'sharp';await sharp({create:{width:1,height:1,channels:3,background:'#fff'}}).png().toBuffer()"], cwd=app)
         shutil.rmtree(app / '.npm-cache', ignore_errors=True)
+        self.freeze_tree(app)
+        self.verify_release_files(archive, app)
         return app
 
     def replace_directory(self, destination, source):
         prepared = destination.with_name(destination.name + '.nova-new-' + uuid.uuid4().hex)
         old = destination.with_name(destination.name + '.nova-old-' + uuid.uuid4().hex)
         shutil.copytree(source, prepared, symlinks=True)
-        self.chown_runtime(prepared)
+        if destination == self.uploads:
+            self.chown_runtime(prepared)
+        else:
+            self.freeze_tree(prepared)
         existed = destination.exists()
         if existed:
             destination.rename(old)
@@ -722,6 +769,12 @@ def main():
             raise Failure('Каталоги менеджера должны принадлежать root и не быть доступны другим на запись')
     lock = open(pathlib.Path(config['state_dir']) / 'manager.lock', 'w')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    for key in ('app_dir', 'web_dir'):
+        path = pathlib.Path(config[key])
+        for ancestor in (path, *path.parents):
+            info = ancestor.stat()
+            if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o022:
+                raise Failure('Код, webroot и родительские каталоги должны принадлежать root без записи для приложения')
     manager = Manager(config)
     manager.recover_interrupted()
     address = pathlib.Path(config['socket'])

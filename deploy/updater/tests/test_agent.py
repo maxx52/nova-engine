@@ -133,6 +133,38 @@ class AgentTests(unittest.TestCase):
                     a.safe_extract(archive, root / 'target', allow_links=True)
                 self.assertFalse((root / 'escape').exists())
 
+    def test_frozen_runtime_strips_special_modes_and_refuses_external_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = Fixture(directory)
+            (manager.app / 'marker').chmod(0o4755)
+            manager.freeze_tree(manager.app)
+            self.assertEqual((manager.app / 'marker').stat().st_mode & 0o7777, 0o755)
+            (manager.app / 'escape').symlink_to('/etc/passwd')
+            with self.assertRaises(a.Failure):
+                manager.freeze_tree(manager.app)
+
+    def test_original_release_files_are_rechecked_after_dependency_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = Fixture(directory)
+            archive = pathlib.Path(directory) / 'release.tar.gz'
+            manager.archive(archive, manager.app, [p.name for p in manager.app.iterdir()])
+            manager.verify_release_files(archive, manager.app)
+            (manager.app / 'marker').write_text('tampered')
+            with self.assertRaisesRegex(a.Failure, 'изменился'):
+                manager.verify_release_files(archive, manager.app)
+
+    def test_unix_peer_gate_allows_only_root_or_the_configured_application_uid(self):
+        class Server:
+            allowed_uid = 991
+        class Request:
+            def __init__(self, uid):
+                self.uid = uid
+            def getsockopt(self, *args):
+                return a.struct.pack('3i', 1234, self.uid, 1000)
+        self.assertTrue(a.LocalServer.verify_request(Server(), Request(0), ''))
+        self.assertTrue(a.LocalServer.verify_request(Server(), Request(991), ''))
+        self.assertFalse(a.LocalServer.verify_request(Server(), Request(992), ''))
+
     def test_backup_is_complete_private_verified_and_does_not_expose_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
             manager = Fixture(directory)
