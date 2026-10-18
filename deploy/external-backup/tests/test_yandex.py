@@ -12,6 +12,15 @@ spec.loader.exec_module(y)
 
 
 class ExternalTests(unittest.TestCase):
+    def test_transport_waits_for_yandex_to_accept_the_upload(self):
+        with patch.object(y, 'run', return_value=b'') as run:
+            y.rclone('copy', '/private/staging', 'nova-crypt:backup')
+        args = run.call_args.args[0]
+        self.assertEqual(args[args.index('--header-upload') + 1], 'Expect: 100-continue')
+        self.assertEqual(args[args.index('--expect-continue-timeout') + 1], '5m')
+        self.assertEqual(args[args.index('--timeout') + 1], '6m')
+        self.assertNotIn('--no-check-certificate', args)
+
     def fixture(self, root):
         backup = root / 'backups' / '20261018T100000Z-abcdef12'
         backup.mkdir(parents=True)

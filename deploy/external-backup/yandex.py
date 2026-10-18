@@ -59,7 +59,11 @@ def run(args, *, incoming=None):
 
 def rclone(*args):
     return run(['/usr/bin/rclone', '--config', str(CONFIG), '--contimeout', '20s',
-                '--timeout', '90s', '--retries', '3', '--low-level-retries', '3',
+                # Yandex WebDAV must accept the PUT before streaming its body.
+                # Without this handshake even small encrypted uploads can stall.
+                '--disable-http2', '--header-upload', 'Expect: 100-continue',
+                '--expect-continue-timeout', '5m', '--timeout', '6m',
+                '--retries', '3', '--low-level-retries', '3',
                 '--transfers', '1', '--checkers', '2', '--bwlimit', '4M', *args])
 
 
