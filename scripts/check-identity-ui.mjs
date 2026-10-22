@@ -13,7 +13,7 @@ export async function runIdentityChecks(page){
   await page.getByRole('button',{name:'Создать пользователя',exact:true}).click()
   await page.getByRole('cell',{name:username,exact:true}).waitFor()
  }
- const login=async username=>{await page.getByRole('button',{name:'Выйти',exact:true}).click();await page.getByLabel('Логин',{exact:true}).fill(username);await page.getByLabel('Пароль',{exact:true}).fill(password);await page.getByRole('button',{name:'Войти',exact:true}).click()}
+ const login=async username=>{await page.getByRole('button',{name:'Выйти',exact:true}).click();await page.getByRole('heading',{name:'Вход в админку',exact:true}).waitFor();await page.getByLabel('Логин',{exact:true}).fill(username);await page.getByLabel('Пароль',{exact:true}).fill(password);await page.getByRole('button',{name:'Войти',exact:true}).click()}
  await login('ci_editor')
  await page.getByRole('heading',{name:'Страницы',exact:true}).waitFor()
  assert.equal(await page.getByRole('button',{name:/Обновления и копии/}).count(),0)
