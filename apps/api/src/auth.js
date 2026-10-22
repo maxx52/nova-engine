@@ -1,3 +1,4 @@
+import {allowed,registerIdentity} from './identity.js'
 import { randomBytes, createHash, scrypt, timingSafeEqual } from 'node:crypto'
 import {workLimiter} from './security.js'
 import { promisify } from 'node:util'
@@ -44,12 +45,13 @@ export function registerAuth(app,pool,{setupKey,secure=false,origins=['http://lo
   if(req.novaSession!==undefined)return req.novaSession
   const value=token(req)
   if(!value){req.novaSession=null;return null}
-  const result=await pool.query('SELECT s.token_hash,s.csrf_token,s.user_id::text,s.last_seen_at,a.username FROM admin_sessions s JOIN admin_accounts a ON a.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND s.last_seen_at>NOW()-INTERVAL \'30 minutes\'',[digest(value)])
+  const result=await pool.query('SELECT s.token_hash,s.csrf_token,s.user_id::text,s.last_seen_at,a.username,a.role FROM admin_sessions s JOIN admin_accounts a ON a.id=s.user_id WHERE a.enabled=TRUE AND s.token_hash=$1 AND s.expires_at>NOW() AND s.last_seen_at>NOW()-INTERVAL \'30 minutes\'',[digest(value)])
   req.novaSession=result.rows[0]||null;if(req.novaSession && +new Date(req.novaSession.last_seen_at)<now()-60000)await pool.query('UPDATE admin_sessions SET last_seen_at=NOW() WHERE token_hash=$1',[req.novaSession.token_hash]);return req.novaSession
  }
  async function requireAdmin(req,reply) {
   const current=await session(req)
   if(!current)return reply.code(401).send({error:'Войдите в админку'})
+  if(!allowed(current.role,req.method,req.routeOptions.url))return reply.code(403).send({error:'Недостаточно прав для этого раздела'})
   if(!['GET','HEAD'].includes(req.method)&&(!trustedMutation(req,reply)||!equal(req.headers['x-csrf-token'],current.csrf_token))){if(!reply.sent)return reply.code(403).send({error:'Обновите страницу и повторите запрос'})}
  }
  async function startSession(user,reply,db=pool) {
@@ -57,7 +59,7 @@ export function registerAuth(app,pool,{setupKey,secure=false,origins=['http://lo
   await db.query('DELETE FROM admin_sessions WHERE expires_at<=NOW()')
   await db.query('INSERT INTO admin_sessions (token_hash,user_id,csrf_token,expires_at) VALUES ($1,$2,$3,$4)',[digest(value),user.id,csrf,new Date(now()+ttl)])
   setCookie(reply,value,ttl/1000)
-  return {user:{username:user.username},csrf_token:csrf}
+  return {user:{id:String(user.id),username:user.username,role:user.role||'owner'},csrf_token:csrf}
  }
  // Authenticate protected routes before body parsing (including multipart/large JSON).
  app.addHook('onRoute',options=>{
@@ -69,35 +71,41 @@ export function registerAuth(app,pool,{setupKey,secure=false,origins=['http://lo
   }
  })
  app.addHook('onSend',async(req,reply,payload)=>{if(req.url.startsWith('/api/auth/')||req.url.startsWith('/api/admin/')||req.novaSession)reply.header('Cache-Control','no-store');return payload})
+ const identity=registerIdentity(app,pool,{requireAdmin,session,startSession,throttle,trustedMutation,verifyPassword,hashPassword,validPassword,setupKey,now})
  app.get('/api/auth/status',async()=>({setup_required:!(await pool.query('SELECT id FROM admin_accounts LIMIT 1')).rowCount}))
- app.get('/api/auth/me',async(req,reply)=>{const current=await session(req);if(!current)return reply.code(401).send({error:'Войдите в админку'});return {user:{username:current.username},csrf_token:current.csrf_token}})
+ app.get('/api/auth/me',async(req,reply)=>{const current=await session(req);if(!current)return reply.code(401).send({error:'Войдите в админку'});return {user:{id:current.user_id,username:current.username,role:current.role||'owner'},csrf_token:current.csrf_token}})
  app.post('/api/auth/setup',{bodyLimit:4096},async(req,reply)=>{
   if(!trustedMutation(req,reply)||!await throttle(req,reply))return
   if((await pool.query('SELECT id FROM admin_accounts LIMIT 1')).rowCount)return reply.code(409).send({error:'Администратор уже создан'})
   const {username,password,setup_key}=req.body||{}
   if(!equal(setup_key,setupKey))return reply.code(401).send({error:'Неверный ключ первоначальной настройки'})
   if(typeof username!=='string'||!/^[a-zA-Z0-9_.-]{3,64}$/.test(username)||!validPassword(password))return reply.code(400).send({error:'Логин: 3–64 латинских символа, цифры, _.-. Пароль: 12–256 символов.'})
-  const result=await pool.query('INSERT INTO admin_accounts (id,username,password_hash) VALUES (1,$1,$2) ON CONFLICT (id) DO NOTHING RETURNING id,username',[username.toLowerCase(),await hashPassword(password)])
+  const result=await pool.query("INSERT INTO admin_accounts (id,username,password_hash,role) VALUES (1,$1,$2,'owner') ON CONFLICT (id) DO NOTHING RETURNING id,username,role",[username.toLowerCase(),await hashPassword(password)])
   if(!result.rowCount)return reply.code(409).send({error:'Администратор уже создан'})
+  req.novaAuditAction='auth.setup';req.novaSession={user_id:String(result.rows[0].id),username:result.rows[0].username,role:'owner'}
   await clearAttempts(req);return reply.code(201).send(await startSession(result.rows[0],reply))
  })
  app.post('/api/auth/login',{bodyLimit:4096},async(req,reply)=>{
   if(!trustedMutation(req,reply)||!await throttle(req,reply))return
+  req.novaAuditAction='auth.login_failed'
   const {username,password}=req.body||{}
   if(typeof username!=='string'||username.length>64||!validPassword(password))return reply.code(401).send({error:'Неверный логин или пароль'})
-  const result=await pool.query('SELECT id,username,password_hash FROM admin_accounts WHERE username=$1',[username.toLowerCase()])
+  const result=await pool.query('SELECT id,username,password_hash,role,enabled,totp_secret FROM admin_accounts WHERE username=$1',[username.toLowerCase()])
   const user=result.rows[0]
+  if(user)req.novaAuditActor={user_id:String(user.id),username:user.username,role:user.role||'owner'}
   // Derive a hash even for unknown usernames to avoid a cheap timing distinction.
   const valid=user?await verifyPassword(password,user.password_hash):(await hashPassword(password),false)
-  if(!valid){app.log.warn({event:'auth.login_failed',requestId:req.id});return reply.code(401).send({error:'Неверный логин или пароль'})}
+  if(!valid||user.enabled===false){app.log.warn({event:'auth.login_failed',requestId:req.id});return reply.code(401).send({error:'Неверный логин или пароль'})}
   const client=await pool.connect()
   try {
    await client.query('BEGIN')
-   const locked=await client.query('SELECT id FROM admin_accounts WHERE id=$1 AND password_hash=$2 FOR UPDATE',[user.id,user.password_hash])
+   const locked=await client.query('SELECT id,username,password_hash,role,enabled,totp_secret FROM admin_accounts WHERE id=$1 AND password_hash=$2 AND enabled=TRUE FOR UPDATE',[user.id,user.password_hash])
    if(!locked.rowCount){await client.query('ROLLBACK');return reply.code(401).send({error:'Неверный логин или пароль'})}
+   const lockedUser=locked.rows?.[0]||user
+   if(lockedUser.totp_secret){const data=await identity.challenge(lockedUser,client);await client.query('COMMIT');req.novaAuditAction='auth.challenge';return data}
    const old=token(req);if(old)await client.query('DELETE FROM admin_sessions WHERE token_hash=$1',[digest(old)])
-   const data=await startSession(user,reply,client)
-   await client.query('COMMIT');await clearAttempts(req);app.log.info({event:'auth.login',userId:user.id});return data
+   const data=await startSession(lockedUser,reply,client)
+   await client.query('COMMIT');await clearAttempts(req);req.novaAuditAction='auth.login';req.novaSession={user_id:String(user.id),username:user.username,role:lockedUser.role||'owner'};app.log.info({event:'auth.login',userId:user.id});return data
   }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
  })
  app.post('/api/auth/logout',{preHandler:requireAdmin},async(req,reply)=>{await pool.query('DELETE FROM admin_sessions WHERE token_hash=$1',[req.novaSession.token_hash]);setCookie(reply,'',0);return reply.code(204).send()})
@@ -115,6 +123,8 @@ export function registerAuth(app,pool,{setupKey,secure=false,origins=['http://lo
    const changed=await client.query('UPDATE admin_accounts SET password_hash=$1 WHERE id=$2 AND password_hash=$3 RETURNING id',[hash,user.id,user.password_hash])
    if(!changed.rowCount){await client.query('ROLLBACK');return reply.code(409).send({error:'Пароль уже изменён. Войдите заново.'})}
    await client.query('DELETE FROM admin_sessions WHERE user_id=$1',[user.id])
+   await client.query('DELETE FROM auth_challenges WHERE user_id=$1',[user.id])
+   await client.query('UPDATE admin_accounts SET totp_pending=NULL,totp_pending_until=NULL WHERE id=$1',[user.id])
    await client.query('COMMIT')
   }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
   await clearAttempts(req);setCookie(reply,'',0);return reply.code(204).send()

@@ -1,0 +1,49 @@
+// Disposable CI deployment only. Never creates accounts on a user installation.
+import assert from 'node:assert/strict'
+import {totp} from '../apps/api/src/identity.js'
+const password='ci-only-disposable-password-8241'
+export async function runIdentityChecks(page){
+ await page.setViewportSize({width:1280,height:900})
+ await page.getByRole('button',{name:/Доступ и безопасность/}).click()
+ await page.getByRole('heading',{name:'Пользователи',exact:true}).waitFor()
+ for(const [username,role] of [['ci_editor','editor'],['ci_manager','manager'],['ci_second_admin','admin']]){
+  await page.getByLabel('Логин',{exact:true}).fill(username)
+  await page.getByLabel('Первоначальный пароль',{exact:true}).fill(password)
+  await page.getByLabel('Роль',{exact:true}).selectOption(role)
+  await page.getByRole('button',{name:'Создать пользователя',exact:true}).click()
+  await page.getByRole('cell',{name:username,exact:true}).waitFor()
+ }
+ const login=async username=>{await page.getByRole('button',{name:'Выйти',exact:true}).click();await page.getByLabel('Логин',{exact:true}).fill(username);await page.getByLabel('Пароль',{exact:true}).fill(password);await page.getByRole('button',{name:'Войти',exact:true}).click()}
+ await login('ci_editor')
+ await page.getByRole('heading',{name:'Страницы',exact:true}).waitFor()
+ assert.equal(await page.getByRole('button',{name:/Обновления и копии/}).count(),0)
+ assert.equal(await page.getByRole('button',{name:/Покупатели/}).count(),0)
+ assert.equal(await page.evaluate(async()=> (await fetch('/api/admin/accounts')).status),403)
+ await login('ci_manager')
+ await page.getByRole('heading',{name:'Заказы',exact:true}).waitFor()
+ assert.equal(await page.getByRole('button',{name:/Страницы/}).count(),0)
+ await page.getByRole('button',{name:/Аналитика/}).click()
+ await page.getByRole('heading',{name:'Аналитика',exact:true}).waitFor()
+ assert.equal(await page.getByRole('button',{name:'Настройки сбора',exact:true}).count(),0)
+ await login('ci_second_admin')
+ await page.getByRole('heading',{name:/Добро пожаловать/}).waitFor()
+ assert.equal(await page.getByRole('button',{name:/Обновления и копии/}).count(),0)
+ await login('ci_admin')
+ await page.getByRole('button',{name:/Доступ и безопасность/}).click()
+ await page.getByLabel('Текущий пароль',{exact:true}).fill(password)
+ await page.getByRole('button',{name:'Настроить двухфакторный вход',exact:true}).click()
+ const secret=await page.locator('.secret').textContent()
+ await page.getByLabel('Код из приложения',{exact:true}).fill(totp(secret.trim(),Math.floor(Date.now()/30000)))
+ await page.getByRole('button',{name:'Подтвердить и включить',exact:true}).click()
+ await page.getByRole('heading',{name:'Сохраните резервные коды',exact:true}).waitFor()
+ const codes=await page.locator('.recovery code').allTextContents();assert.equal(codes.length,10)
+ await page.getByRole('button',{name:'Коды сохранены',exact:true}).click()
+ await login('ci_admin')
+ await page.getByLabel('Код приложения или резервный код',{exact:true}).fill(codes[0])
+ await page.getByRole('button',{name:'Войти',exact:true}).click()
+ await page.getByRole('button',{name:/Доступ и безопасность/}).click()
+ await page.getByText('Осталось резервных кодов: 9.',{exact:true}).waitFor()
+ await page.setViewportSize({width:390,height:844})
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)
+ console.log('PASS identity UI: multiple administrators, editor/manager navigation, server permissions, 2FA enrolment, recovery login, mobile layout')
+}

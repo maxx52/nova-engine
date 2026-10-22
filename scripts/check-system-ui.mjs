@@ -43,6 +43,7 @@ try{
  await waitForCommand(4);assert.deepEqual(commands[3],{kind:'restore',backup_id:backupId,confirm:'ВОССТАНОВИТЬ'})
  await page.setViewportSize({width:390,height:844})
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)
+ await (await import('./check-identity-ui.mjs')).runIdentityChecks(page)
  assert.deepEqual(errors,[])
  console.log('PASS system UI: release notes escaped, update is explicit, backup/schedule commands valid, restore requires typed confirmation, mobile width fits')
 }catch(e){console.log('::error title=System UI::'+String(e).replaceAll('%','%25').replaceAll('\n','%0A'));throw e}finally{await browser.close()}

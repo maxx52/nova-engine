@@ -1,4 +1,5 @@
 <script setup>
+import {auth} from './adminApi.js'
 import {ref,computed,onMounted} from 'vue'
 import {analyticsZones,dayAt,addDays} from '../../../shared/analytics.js'
 const props=defineProps({apiWrite:Function})
@@ -28,7 +29,7 @@ onMounted(async()=>{try{settings.value=await props.apiWrite('/api/admin/analytic
 </script>
 <template>
 <div class="analytics-workspace">
- <div class="page-title"><div><span class="eyebrow">СТАТИСТИКА САЙТА</span><h1>Аналитика</h1><p>Посещения, источники переходов и результаты магазина.</p></div><div class="analytics-buttons"><button class="row-btn" :disabled="!report||loading" @click="exportCsv">Скачать CSV</button><button class="row-btn" @click="showSettings=!showSettings">Настройки сбора</button></div></div>
+ <div class="page-title"><div><span class="eyebrow">СТАТИСТИКА САЙТА</span><h1>Аналитика</h1><p>Посещения, источники переходов и результаты магазина.</p></div><div class="analytics-buttons"><button class="row-btn" :disabled="!report||loading" @click="exportCsv">Скачать CSV</button><button class="row-btn" v-if="auth.user.role!=='manager'" @click="showSettings=!showSettings">Настройки сбора</button></div></div>
  <form v-if="showSettings" class="panel analytics-settings" @submit.prevent="saveSettings"><h2>Сбор статистики</h2><fieldset :disabled="saving"><label class="analytics-check"><input v-model="settings.enabled" type="checkbox"> Собирать посещения сайта</label><label class="analytics-check"><input v-model="settings.exclude_admin" type="checkbox"> Исключать посещения вошедшего администратора</label><label>Часовой пояс отчётов<select v-model="settings.timezone" aria-label="Часовой пояс"><option v-for="zone in analyticsZones" :key="zone" :value="zone">{{zone}}</option></select></label><p>История посещений хранится 90 дней. Если браузер запрещает отслеживание, посещения не учитываются. После включения сбора обновите открытую страницу сайта.</p><button class="primary-btn">{{saving?'Сохранение…':'Сохранить настройки'}}</button></fieldset></form>
  <div class="panel analytics-period"><div class="analytics-presets"><button v-for="(label,days) in {1:'Сегодня',7:'7 дней',30:'30 дней'}" :key="days" :class="{active:preset===Number(days)}" @click="range(Number(days))">{{label}}</button></div><form @submit.prevent="preset=0;load()"><label>С<input v-model="from" type="date" :min="minDay" :max="to||today" required aria-label="Начало периода"></label><label>По<input v-model="to" type="date" :min="from||minDay" :max="today" required aria-label="Конец периода"></label><button class="primary-btn" :disabled="loading">{{loading?'Загрузка…':'Показать'}}</button></form><small>{{report?.range.timezone||settings.timezone}}</small></div>
  <p v-if="error" class="alert" role="alert">{{error}}</p><p v-if="report&&!report.settings.enabled" class="analytics-notice">Сбор посещений выключен. Ранее накопленные данные и показатели заказов доступны в отчёте.</p>

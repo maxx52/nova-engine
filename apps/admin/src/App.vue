@@ -1,5 +1,6 @@
 <script setup>
 import {PRODUCT_VERSION} from '../../../config/release.js'
+import SecurityWorkspace from './SecurityWorkspace.vue'
 import SystemWorkspace from './SystemWorkspace.vue'
 import ThemesWorkspace from './ThemesWorkspace.vue'
 
@@ -9,7 +10,7 @@ import AnalyticsWorkspace from './AnalyticsWorkspace.vue'
 import CommerceWorkspace from './CommerceWorkspace.vue'
 import DesignWorkspace from './DesignWorkspace.vue'
 import MediaPicker from './MediaPicker.vue'
-import { adminFetch } from './adminApi.js'
+import { auth,adminFetch } from './adminApi.js'
 import { ref, computed, onMounted } from 'vue'
 import PagesWorkspace from './PagesWorkspace.vue'
 import SiteSettings from './SiteSettings.vue'
@@ -18,12 +19,15 @@ import AccountActions from './AccountActions.vue'
 import MediaLibrary from './MediaLibrary.vue'
 const siteSettings=ref({shop_enabled:true})
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
-const page=ref('overview')
+const role=auth.user.role||'owner'
+const commerceRole=['owner','admin','manager'].includes(role)
+const visibleSections=role==='editor'?['security','pages','blog','products','categories','media']:role==='manager'?['security','orders','customers','analytics']:null
+const page=ref(role==='editor'?'pages':role==='manager'?'orders':'overview')
 const designDirty=ref(false)
 const products=ref([])
 const commerce=ref({orders:0,new_orders:0,customers:0,completed_cents:0})
-async function loadCommerce(){commerce.value=await apiWrite('/api/admin/commerce/summary','GET')}
-async function commerceChanged(){try{await Promise.all([loadCommerce(),reload()])}catch(e){error.value=e.message}}
+async function loadCommerce(){if(!commerceRole)return;commerce.value=await apiWrite('/api/admin/commerce/summary','GET')}
+async function commerceChanged(){if(!commerceRole)return;try{await Promise.all([loadCommerce(),reload()])}catch(e){error.value=e.message}}
 const loading=ref(true)
 const error=ref('')
 const filter=ref('')
@@ -45,9 +49,9 @@ const saveError=ref('')
 async function apiWrite(url,method,body){const response=await adminFetch(url,{method,headers:body?{'content-type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{})});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'Ошибка запроса: '+response.status)}return response.status===204?null:response.json()}
 async function reload(){const r=await adminFetch('/api/products');if(!r.ok)throw Error('Ошибка загрузки каталога');products.value=await r.json()}
 const categories=computed(()=>categoryRows.value.map(c=>c.name))
-const allSections=[{id:'system',icon:'↻',label:'Обновления и копии'},{id:'themes',icon:'◈',label:'Темы и шаблоны'},{id:'forms',icon:'✉',label:'Формы и заявки'},{id:'payments',icon:'₽',label:'Оплата'},{id:'analytics',icon:'▥',label:'Аналитика'},{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
+const allSections=[{id:'security',icon:'♙',label:'Доступ и безопасность'},{id:'system',icon:'↻',label:'Обновления и копии'},{id:'themes',icon:'◈',label:'Темы и шаблоны'},{id:'forms',icon:'✉',label:'Формы и заявки'},{id:'payments',icon:'₽',label:'Оплата'},{id:'analytics',icon:'▥',label:'Аналитика'},{id:'design',icon:'⌘',label:'Оформление и код'},{id:'media',icon:'▧',label:'Медиатека'},{id:'pages',icon:'▤',label:'Страницы'},{id:'blog',icon:'✎',label:'Блог'},{id:'overview',icon:'◫',label:'Обзор'},{id:'products',icon:'▦',label:'Товары'},{id:'categories',icon:'▤',label:'Категории'},{id:'orders',icon:'▤',label:'Заказы'},{id:'customers',icon:'♙',label:'Покупатели'},{id:'settings',icon:'⚙',label:'Настройки'}]
 async function settingsSaved(settings){siteSettings.value=settings;if(settings.shop_enabled){try{await Promise.all([reload(),loadCategories(),loadCommerce()]);error.value=''}catch(e){error.value=e.message}}}
-const sections=computed(()=>allSections.filter(s=>(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
+const sections=computed(()=>allSections.filter(s=>(!visibleSections||visibleSections.includes(s.id))&&(role!=='admin'||s.id!=='system')&&(siteSettings.value.blog_enabled || s.id!=='blog') && (shopEnabled.value || !['products','categories','orders','customers'].includes(s.id))))
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
 async function loadCategories(){const r=await adminFetch('/api/categories');if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
@@ -85,7 +89,7 @@ async function addCategory(){
  categoryError.value=''
  try{const values=templateText.value.split(',').map(x=>x.trim()).filter(Boolean);await apiWrite(categoryEditing.value?'/api/categories/'+categoryEditing.value:'/api/categories',categoryEditing.value?'PUT':'POST',{name:categoryName.value.trim(),parent_id:parentCategory.value?Number(parentCategory.value):null,attribute_templates:values});cancelCategory();await loadCategories()}catch(e){categoryError.value=e.message}
 }
-onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET');if(shopEnabled.value)await Promise.all([reload(),loadCategories(),loadCommerce()])}catch(e){error.value=e.message}finally{loading.value=false}})
+onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET');if(role==='manager'&&!shopEnabled.value)page.value='analytics';if(shopEnabled.value)await Promise.all([reload(),loadCategories(),loadCommerce()])}catch(e){error.value=e.message}finally{loading.value=false}})
 </script>
 <template>
 <div class="admin-layout">
@@ -100,6 +104,7 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Панель управления</span><AccountActions /><div class="avatar">A</div></div></header>
     <main class="content">
       <div v-if="page==='media'"><div class="page-title"><div><h1>Медиатека</h1><p>Изображения сайта</p></div></div><MediaLibrary /></div>
+      <SecurityWorkspace v-if="page==='security'" />
       <FormsWorkspace v-if="page==='forms'" :api-write="apiWrite" />
       <PaymentsWorkspace v-if="page==='payments'" :api-write="apiWrite" />
       <AnalyticsWorkspace v-if="page==='analytics'" :api-write="apiWrite" />
@@ -110,7 +115,7 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
       <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" />
       <div v-if="page==='overview'">
         <div class="page-title"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Добро пожаловать в NOVA 👋</h1><p>Управляйте содержимым сайта и каталогом в одном месте.</p></div><button v-if="shopEnabled" class="primary-btn" @click="navigate('products');edit()">＋ Добавить товар</button></div>
-        <div v-if="shopEnabled" class="stats-grid"><div class="stat-card"><span>Всего товаров</span><strong>{{products.length}}</strong><small>Товары из базы данных</small><div class="stat-icon">▦</div></div><div class="stat-card"><span>Сумма выполненных заказов</span><strong>{{money(commerce.completed_cents/100)}}</strong><small>Стоимость товаров без доставки</small><div class="stat-icon">₽</div></div><div class="stat-card"><span>Заказы</span><strong>{{commerce.orders}}</strong><small>Новых: {{commerce.new_orders}}</small><div class="stat-icon">▤</div></div><div class="stat-card"><span>Покупатели</span><strong>{{commerce.customers}}</strong><small>Карточки по номеру телефона</small><div class="stat-icon">♙</div></div></div>
+        <div v-if="shopEnabled && commerceRole" class="stats-grid"><div class="stat-card"><span>Всего товаров</span><strong>{{products.length}}</strong><small>Товары из базы данных</small><div class="stat-icon">▦</div></div><div class="stat-card"><span>Сумма выполненных заказов</span><strong>{{money(commerce.completed_cents/100)}}</strong><small>Стоимость товаров без доставки</small><div class="stat-icon">₽</div></div><div class="stat-card"><span>Заказы</span><strong>{{commerce.orders}}</strong><small>Новых: {{commerce.new_orders}}</small><div class="stat-icon">▤</div></div><div class="stat-card"><span>Покупатели</span><strong>{{commerce.customers}}</strong><small>Карточки по номеру телефона</small><div class="stat-icon">♙</div></div></div>
         <div v-if="shopEnabled" class="panel"><div class="panel-heading"><div><h2>Недавно добавленные товары</h2><p>Данные из PostgreSQL через NOVA API</p></div><button class="text-btn" @click="navigate('products')">Все товары →</button></div><div v-if="loading" class="empty">Загрузка...</div><div v-else-if="error" class="alert">{{error}}</div><div v-else class="table-scroll"><table><thead><tr><th>Товар</th><th>Категория</th><th>Цена</th></tr></thead><tbody><tr v-for="p in products.slice(-5).reverse()" :key="p.id"><td><span class="product-marker">📦</span><strong>{{p.name}}</strong></td><td>{{p.category}}</td><td class="table-price">{{money(p.price)}}</td></tr></tbody></table></div></div>
       </div>
       <div v-if="page==='categories'"><div class="page-title"><div><span class="eyebrow">КАТАЛОГ</span><h1>Категории</h1><p>Создавайте категории товаров.</p></div></div><div class="panel"><div class="panel-heading"><h2>Категории ({{categoryRows.length}})</h2></div><div style="padding:20px;display:flex;flex-wrap:wrap;gap:10px"><input class="search-input" v-model="categoryName" placeholder="Название категории" maxlength="100"><select class="search-input" v-model="parentCategory"><option value="">Без родителя</option><option v-for="c in categoryRows.filter(c=>c.id!==categoryEditing)" :key="c.id" :value="String(c.id)">{{c.name}}</option></select><input class="search-input" v-model="templateText" placeholder="Шаблоны через запятую: Бренд, Цвет"><button class="primary-btn" @click="addCategory">{{categoryEditing?'Сохранить категорию':'Добавить категорию'}}</button><button v-if="categoryEditing" class="row-btn" @click="cancelCategory">Отмена</button></div><p v-if="categoryError" class="alert">{{categoryError}}</p><div class="table-scroll"><table><thead><tr><th>ID</th><th>Категория</th></tr></thead><tbody><tr v-for="c in categoryTree" :key="c.id"><td>{{c.id}}</td><td><strong :style="{paddingLeft:(c.depth*22)+'px',display:'inline-block'}">{{c.depth?'↳ ':''}}{{c.name}}</strong><div style="color:#82948a;font-size:11px">{{(c.attribute_templates||[]).join(' · ')}}</div><button class="row-btn" @click="categoryEdit(c)">Редактировать</button></td></tr></tbody></table></div></div></div>

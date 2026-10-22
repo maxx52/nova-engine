@@ -9,14 +9,16 @@ async function fixture(secure=false){
   queries.push(sql)
   if(sql.startsWith('DELETE FROM auth_throttle')){if(sql.includes('key=$1'))throttles.delete(args[0]);else for(const [key,b]of throttles)if(+b.reset<=+args[0])throttles.delete(key);return {rowCount:1}}
   if(sql.startsWith('INSERT INTO auth_throttle')){let b=throttles.get(args[0]);if(!b||+b.reset<=+args[2])b={count:0,reset:args[1]};if(b.count>=10)return {rowCount:0,rows:[]};b.count++;throttles.set(args[0],b);return {rowCount:1,rows:[{attempts:b.count}]}}
+  if(sql.startsWith('INSERT INTO admin_audit')||sql.startsWith('DELETE FROM auth_challenges')||sql.startsWith('UPDATE admin_accounts SET totp_pending'))return {rowCount:1,rows:[]}
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {}
   if(sql==='SELECT id FROM admin_accounts LIMIT 1')return {rowCount:account?1:0,rows:account?[{id:1}]:[]}
   if(sql.startsWith('INSERT INTO admin_accounts')){if(account)return {rowCount:0,rows:[]};account={id:1,username:args[0],password_hash:args[1]};return {rowCount:1,rows:[{id:1,username:account.username}]}}
+  if(sql.startsWith('SELECT id,username,password_hash,role,enabled,totp_secret FROM admin_accounts WHERE id='))return {rowCount:account&&String(account.id)===String(args[0])&&account.password_hash===args[1]?1:0,rows:account&&account.password_hash===args[1]?[{...account,role:'owner',enabled:true}]:[]}
   if(sql.startsWith('SELECT id FROM admin_accounts WHERE id='))return {rowCount:account&&String(account.id)===String(args[0])&&account.password_hash===args[1]?1:0}
-  if(sql.startsWith('SELECT id,username,password_hash FROM admin_accounts'))return {rows:account&&(sql.includes('username=')?account.username===args[0]:String(account.id)===String(args[0]))?[{...account}]:[]}
+  if((sql.startsWith('SELECT id,username,password_hash FROM admin_accounts')||sql.startsWith('SELECT id,username,password_hash,role,enabled,totp_secret FROM admin_accounts')))return {rows:account&&(sql.includes('username=')?account.username===args[0]:String(account.id)===String(args[0]))?[{...account}]:[]}
   if(sql.startsWith('UPDATE admin_accounts')){if(!account||String(account.id)!==String(args[1])||account.password_hash!==args[2])return {rowCount:0};account.password_hash=args[0];return {rowCount:1}}
   if(sql.startsWith('INSERT INTO admin_sessions')){sessions.set(args[0],{token_hash:args[0],user_id:String(args[1]),csrf_token:args[2],expires_at:args[3],last_seen_at:new Date(time)});return {rowCount:1}}
-  if(sql.startsWith('SELECT s.token_hash')){const row=sessions.get(args[0]);return {rows:row&&+row.expires_at>time&&+row.last_seen_at>time-30*60000?[{...row,username:account.username}]:[]}}
+  if(sql.startsWith('SELECT s.token_hash')){const row=sessions.get(args[0]);return {rows:row&&+row.expires_at>time&&+row.last_seen_at>time-30*60000?[{...row,username:account.username,role:'owner'}]:[]}}
   if(sql.startsWith('UPDATE admin_sessions SET last_seen_at')){const row=sessions.get(args[0]);if(row)row.last_seen_at=new Date(time);return {rowCount:1}}
   if(sql.startsWith('DELETE FROM admin_sessions')){for(const [hash,row]of sessions){if(sql.includes('expires_at')?+row.expires_at<=time:sql.includes('user_id')?row.user_id===String(args[0]):hash===args[0])sessions.delete(hash)}return {rowCount:1}}
   throw Error('Unexpected query '+sql)

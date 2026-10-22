@@ -1,3 +1,4 @@
+import {initIdentitySchema} from './identity.js'
 import {initThemes} from './themes.js'
 import {initForms} from './forms.js'
 import {initPayments} from './payments.js'
@@ -31,6 +32,7 @@ export async function initDatabase() {
   await pool.query(`CREATE TABLE IF NOT EXISTS auth_throttle (key VARCHAR(64) PRIMARY KEY,attempts INTEGER NOT NULL,reset_at TIMESTAMPTZ NOT NULL)`)
   await pool.query('CREATE INDEX IF NOT EXISTS auth_throttle_expiry_idx ON auth_throttle(reset_at)')
   await pool.query('CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at)')
+  await initIdentitySchema(pool)
   await pool.query(`CREATE TABLE IF NOT EXISTS pages (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(150) NOT NULL,
