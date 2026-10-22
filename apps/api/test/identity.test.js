@@ -16,6 +16,9 @@ test('TOTP RFC 6238 vectors, clock window, replay rejection and authenticated se
 })
 test('role matrix denies sensitive routes and unknown roles',()=>{
  for(const role of ['editor','manager','admin'])for(const path of ['/api/admin/accounts','/api/admin/accounts/:id','/api/admin/audit','/api/admin/system/jobs'])assert.equal(allowed(role,'POST',path),false)
+ for(const path of ['/api/admin/packages','/api/admin/packages/template/:id','/api/admin/forms'])assert.equal(allowed('editor','GET',path),true)
+ for(const path of ['/api/admin/packages','/api/admin/forms/settings','/api/admin/forms/messages'])assert.equal(allowed('editor','POST',path),false)
+ assert.equal(allowed('editor','GET','/api/admin/packages/theme/:id'),false)
  assert.equal(allowed('editor','PUT','/api/admin/pages/:id'),true);assert.equal(allowed('editor','GET','/api/admin/orders'),false)
  assert.equal(allowed('manager','PUT','/api/admin/orders/:id'),true);assert.equal(allowed('manager','PUT','/api/admin/analytics/settings'),false)
  assert.equal(allowed('manager','GET','/api/admin/analytics/settings'),true);assert.equal(allowed('unknown','GET','/api/admin/posts'),false)
