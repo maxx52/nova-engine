@@ -55,6 +55,7 @@ const cart = ref([])
 watch(cart,items=>{try{sessionStorage.setItem('nova-cart',JSON.stringify(items.slice(0,50).map(x=>({product_id:x.id,variant_name:x.variantName||'',quantity:x.quantity}))))}catch{}},{deep:true})
 function restoreCart(items){
  for(const row of items.slice(0,50)){
+  if(!row||typeof row!=='object')continue
   const p=products.value.find(p=>p.id===row.product_id);if(!p||!Number.isInteger(row.quantity)||row.quantity<1)continue
   const v=p.variants?.find(v=>v.name===row.variant_name)
   if(row.variant_name&&!v||p.variants?.length&&!v)continue
@@ -111,6 +112,7 @@ function addToCart(product,variant=null,quantity=1) {
   const key=JSON.stringify([product.id,choice?.name||''])
   const existing=cart.value.find(item=>item.cartKey===key)
   if(existing){if(existing.quantity>=Math.min(100,choice?.stock??product.stock)){notice.value=t.value.stock_limit;return}existing.quantity=Math.min(Math.min(100,choice?.stock??product.stock),existing.quantity+quantity)}
+  else if(cart.value.length>=50){notice.value='В корзине может быть до 50 позиций';return}
   else cart.value.push({...product,cartKey:key,variantName:choice?.name||'',available:choice?.stock??product.stock,name:choice?product.name+' — '+choice.name:product.name,price:choice?.price??product.price,quantity:Math.min(quantity,100,choice?.stock??product.stock)})
 
   track('cart_add',routePath.value)
@@ -248,5 +250,5 @@ onMounted(async () => {
 .site-logo-image { max-width:100px;max-height:48px;object-fit:contain; }
 .site-name { max-width:260px;overflow-wrap:anywhere;line-height:1.2; }
 .site-welcome { min-height:65vh;padding-top:80px;padding-bottom:80px;overflow-wrap:anywhere; }
-@media(max-width:600px){.site-name{max-width:160px;font-size:20px;}.site-logo-image{max-width:64px;}}
+@media(max-width:600px){.logo{min-width:0;max-width:38%}.account-link{max-width:74px;font-size:12px;padding:4px}.site-name{max-width:160px;font-size:20px;}.site-logo-image{max-width:64px;}}
 </style>

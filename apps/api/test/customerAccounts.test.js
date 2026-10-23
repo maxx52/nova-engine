@@ -29,6 +29,7 @@ test('customer accounts: proof, isolation, addresses, checkout and safe reorder'
   const locked=await challenge('locked@example.com');for(let i=0;i<5;i++)assert.equal((await call('POST','/api/account/login/verify',{challenge_id:locked.challenge_id,code:locked.code==='000000'?'111111':'000000'})).statusCode,401)
   assert.equal((await call('POST','/api/account/login/verify',{challenge_id:locked.challenge_id,code:locked.code})).statusCode,401)
   assert.equal((await call('POST','/api/account/login/request',{email:'alice@example.com'})).statusCode,429)
+  const expired=await challenge('expired@example.com');await query("UPDATE customer_login_codes SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",[expired.challenge_id]);assert.equal((await call('POST','/api/account/login/verify',{challenge_id:expired.challenge_id,code:expired.code})).statusCode,401)
   bob=await login('bob@example.com')
   assert.equal((await call('GET','/api/admin/orders',undefined,alice)).statusCode,401)
  })
@@ -43,6 +44,8 @@ test('customer accounts: proof, isolation, addresses, checkout and safe reorder'
   r=await call('POST','/api/account/addresses',{...body,label:'Работа'},alice);assert.equal(r.statusCode,201,r.body)
   const rows=(await call('GET','/api/account/addresses',undefined,alice)).json();assert.equal(rows.filter(a=>a.is_default).length,1);assert.equal((await call('GET','/api/account/addresses',undefined,bob)).json().length,0)
   assert.equal((await call('DELETE','/api/account/addresses/'+first.id,{revision:first.revision},alice)).statusCode,409)
+  for(let i=2;i<20;i++)assert.equal((await call('POST','/api/account/addresses',{...body,label:'Адрес '+i,is_default:false},alice)).statusCode,201)
+  assert.equal((await call('POST','/api/account/addresses',body,alice)).statusCode,409)
  })
  await t.test('guest orders stay private; authenticated orders bind only to session',async()=>{
   await query('UPDATE products SET stock=20,price=10 WHERE id=1')

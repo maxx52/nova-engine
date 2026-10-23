@@ -16,7 +16,7 @@ const form=ref({name:'',phone:'',email:'',method:'pickup',address:'',comment:''}
 watch(()=>busy.value||!!pending.value,value=>emit('locked',value))
 const addresses=ref([]),selectedAddress=ref('');let pendingOwner
 watch(()=>customer.user?.id,(id,old)=>{if(old&&id!==old){addresses.value=[];selectedAddress.value='';form.value={name:'',phone:'',email:'',method:'pickup',address:'',comment:''}}})
-onMounted(async()=>{try{await refreshCustomer();if(!customer.user)return;form.value.name=customer.user.name;form.value.phone=customer.user.phone;form.value.email=customer.user.email;addresses.value=await customerRequest('/api/account/addresses');const a=addresses.value.find(a=>a.is_default);if(a){selectedAddress.value=a.id;useAddress()}}catch(e){error.value=e.message}})
+onMounted(async()=>{try{await refreshCustomer();if(!customer.user)return;form.value.name=customer.user.name;form.value.phone=customer.user.phone;form.value.email=customer.user.email;const owner=customer.user.id;const rows=await customerRequest('/api/account/addresses');if(owner!==customer.user?.id)return;addresses.value=rows;const a=addresses.value.find(a=>a.is_default);if(a){selectedAddress.value=a.id;useAddress()}}catch(e){error.value=e.message}})
 function useAddress(){const a=addresses.value.find(a=>a.id===selectedAddress.value);if(a){form.value.name=a.name;form.value.phone=a.phone;form.value.address=a.address}}
 const money=cents=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(cents/100)
 const estimate=computed(()=>Math.round(props.items.reduce((sum,x)=>sum+Math.round(x.price*100)*x.quantity,0)))
