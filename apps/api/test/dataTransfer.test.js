@@ -49,7 +49,7 @@ test('PostgreSQL transfer and section library: preview isolation, conflict check
   r=await preview('products',[{sku:'TRANSFER-1',price:15}],'merge');assert.equal(r.summary.unchanged,1)
  })
  await t.test('duplicate keys, unknown fields, missing media, bad forms, unsafe URLs and excess precision block all writes',async()=>{
-  for(const records of [[product('DUP'),product('DUP')],[{...product('BAD'),password:'not-a-field'}],[{...product('BAD'),price:12.345}],[{...product('BAD'),image_url:'/uploads/'+randomUUID()+'.png'}]]){const r=await preview('products',records);assert.equal(r.valid,false);assert.equal(r.id,null)}
+  for(const records of [[product('DUP'),product('DUP')],[{...product('BAD'),password:'not-a-field'}],[{...product('BAD'),price:12.345}],[{...product('BAD'),price:0.000001}],[{...product('BAD'),image_url:'/uploads/'+randomUUID()+'.png'}]]){const r=await preview('products',records);assert.equal(r.valid,false);assert.equal(r.id,null)}
   const page={title:'Page',slug:'transfer-invalid',content:'',published:false,sections:[{...textSection('Bad'),button_url:'javascript:alert(1)'}]};assert.equal((await preview('pages',[page])).valid,false)
   page.sections=[{id:randomUUID(),type:'form',form_id:randomUUID()}];assert.equal((await preview('pages',[page])).valid,false)
   assert.equal((await preview('pages',[{...page,slug:'order-status',sections:[]}])).valid,false)

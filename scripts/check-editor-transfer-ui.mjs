@@ -9,7 +9,7 @@ export async function runEditorTransferChecks(page){
  await page.locator('.section-editor').nth(0).getByLabel('Заголовок',{exact:true}).fill('First block')
  await page.getByRole('button',{name:'＋ Текст',exact:true}).click()
  await page.locator('.section-editor').nth(1).getByLabel('Заголовок',{exact:true}).fill('Second block')
- await page.locator('.section-editor').nth(0).getByRole('button',{name:'Перетащить секцию',exact:true}).dragTo(page.locator('.section-editor').nth(1))
+ await page.locator('.section-editor').nth(0).getByRole('button',{name:'Перетащить секцию',exact:true}).dragTo(page.locator('.section-editor').nth(1).locator('header'))
  assert.equal(await page.locator('.section-editor').nth(0).getByLabel('Заголовок',{exact:true}).inputValue(),'Second block')
  const block=page.locator('.section-editor').nth(0)
  await block.getByLabel('Название в библиотеке',{exact:true}).fill('CI saved text')

@@ -3,7 +3,7 @@ import CodeEditor from './CodeEditor.vue'
 import CodeFrame from '../../../shared/CodeFrame.vue'
 import MediaPicker from './MediaPicker.vue'
 import { adminFetch } from './adminApi.js'
-import { ref,onMounted } from 'vue'
+import { ref,onMounted,onBeforeUnmount } from 'vue'
 const emit = defineEmits(['uploading','save'])
 const sections = defineModel({ default: () => [] })
 const props=defineProps({ disabled: Boolean })
@@ -14,11 +14,14 @@ async function saveSection(section){if(props.disabled||uploading.value||libraryB
 async function insertSaved(row){if(props.disabled||uploading.value||libraryBusy.value||sections.value.length>=50)return;libraryBusy.value=true;error.value='';try{const saved=await libraryRequest('/'+row.id);sections.value.push({...JSON.parse(JSON.stringify(saved.section)),id:crypto.randomUUID()})}catch(e){error.value=e.message}finally{libraryBusy.value=false}}
 async function removeSaved(row){if(props.disabled||!confirm('Удалить сохранённую секцию «'+row.title+'» из библиотеки? На страницах копии останутся.'))return;libraryBusy.value=true;error.value='';try{await libraryRequest('/'+row.id,'DELETE');await loadLibrary()}catch(e){error.value=e.message}finally{libraryBusy.value=false}}
 function reorder(id,target){if(props.disabled||uploading.value||libraryBusy.value)return;const from=sections.value.findIndex(s=>s.id===id),to=sections.value.findIndex(s=>s.id===target);if(from<0||to<0||from===to)return;const [s]=sections.value.splice(from,1);sections.value.splice(to,0,s)}
-function dragStart(e,id){if(props.disabled||uploading.value){e.preventDefault();return}dragId.value=id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',id)}
-function drop(e,id){e.preventDefault();reorder(dragId.value,id);dragId.value='';dropId.value=''}
-function touchStart(e,id){if(e.pointerType!=='touch'||props.disabled||uploading.value)return;dragId.value=id;e.currentTarget.setPointerCapture(e.pointerId)}
-function touchMove(e){if(e.pointerType!=='touch'||!dragId.value)return;dropId.value=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-section-id]')?.dataset.sectionId||''}
-function touchEnd(e){if(e.pointerType!=='touch')return;if(dropId.value)reorder(dragId.value,dropId.value);dragId.value='';dropId.value=''}
+let pointer=null,scrollFrame=0,lastPoint=null,scrollContainer=null
+function updateDrop(){dropId.value=lastPoint?document.elementFromPoint(lastPoint.x,lastPoint.y)?.closest('[data-section-id]')?.dataset.sectionId||'':''}
+function autoScroll(){if(pointer===null)return;if(scrollContainer&&lastPoint){const box=scrollContainer.getBoundingClientRect(),dy=lastPoint.y<box.top+60?-10:lastPoint.y>box.bottom-60?10:0;if(dy){scrollContainer.scrollTop+=dy;updateDrop()}}scrollFrame=requestAnimationFrame(autoScroll)}
+function pointerStart(e,id){if(e.button!==0||pointer!==null||props.disabled||uploading.value||libraryBusy.value)return;e.preventDefault();pointer=e.pointerId;dragId.value=id;dropId.value=id;lastPoint={x:e.clientX,y:e.clientY};scrollContainer=e.currentTarget.closest('.modal');e.currentTarget.setPointerCapture(e.pointerId);autoScroll()}
+function pointerMove(e){if(e.pointerId!==pointer)return;lastPoint={x:e.clientX,y:e.clientY};updateDrop()}
+function cancelDrag(){cancelAnimationFrame(scrollFrame);pointer=null;lastPoint=null;scrollContainer=null;dragId.value='';dropId.value=''}
+function pointerEnd(e){if(e.pointerId!==pointer)return;lastPoint={x:e.clientX,y:e.clientY};updateDrop();if(dropId.value)reorder(dragId.value,dropId.value);cancelDrag()}
+onBeforeUnmount(cancelDrag)
 onMounted(async()=>{try{const r=await adminFetch('/api/admin/forms');if(r.ok)forms.value=await r.json()}catch{};try{await loadLibrary()}catch(e){error.value=e.message}})
 const uploading = ref(false), error = ref('')
 const previews=ref({}),codeFiles=ref({}),codeErrors=ref({})
@@ -52,8 +55,8 @@ async function upload(event, section) {
   <fieldset class="sections-editor" :disabled="disabled || uploading || libraryBusy">
     <legend>Секции страницы ({{ sections.length }}/50)</legend>
     <p>Перетаскивайте блоки за ручку ⋮⋮. Кнопки ↑/↓ доступны с клавиатуры. Секции отображаются после заголовка и вступительного текста.</p><details class="saved-library"><summary>Сохранённые секции ({{library.length}})</summary><p v-if="!library.length">Сохраните блок из редактора, чтобы использовать его на других страницах.</p><div v-for="row in library" :key="row.id" class="saved-row"><strong>{{row.title}}</strong><small>{{names[row.type]}}</small><button type="button" class="row-btn" :disabled="sections.length>=50" @click="insertSaved(row)">Вставить секцию</button><button type="button" class="row-btn danger" @click="removeSaved(row)">Удалить из библиотеки</button></div></details>
-    <article v-for="(section,index) in sections" :key="section.id" class="section-editor" :data-section-id="section.id" :class="{'drop-target':dropId===section.id,dragging:dragId===section.id}" @dragover.prevent="dropId=section.id" @drop="drop($event,section.id)">
-      <header><button type="button" class="drag-handle row-btn" draggable="true" aria-label="Перетащить секцию" @dragstart="dragStart($event,section.id)" @dragend="dragId='';dropId=''" @pointerdown="touchStart($event,section.id)" @pointermove="touchMove" @pointerup="touchEnd" @pointercancel="dragId='';dropId=''">⋮⋮</button><strong>{{ index + 1 }}. {{ names[section.type] }}</strong><div><button type="button" class="row-btn" :disabled="index===0" aria-label="Поднять секцию" @click="move(index,-1)">↑</button><button type="button" class="row-btn" :disabled="index===sections.length-1" aria-label="Опустить секцию" @click="move(index,1)">↓</button><button type="button" class="row-btn danger" @click="sections.splice(index,1)">Удалить</button></div></header>
+    <article v-for="(section,index) in sections" :key="section.id" class="section-editor" :data-section-id="section.id" :class="{'drop-target':dropId===section.id,dragging:dragId===section.id}">
+      <header><button type="button" class="drag-handle row-btn" aria-label="Перетащить секцию" @pointerdown="pointerStart($event,section.id)" @pointermove="pointerMove" @pointerup="pointerEnd" @pointercancel="cancelDrag">⋮⋮</button><strong>{{ index + 1 }}. {{ names[section.type] }}</strong><div><button type="button" class="row-btn" :disabled="index===0" aria-label="Поднять секцию" @click="move(index,-1)">↑</button><button type="button" class="row-btn" :disabled="index===sections.length-1" aria-label="Опустить секцию" @click="move(index,1)">↓</button><button type="button" class="row-btn danger" @click="sections.splice(index,1)">Удалить</button></div></header>
       <template v-if="section.type !== 'image' && section.type !== 'code' && section.type !== 'form'"><label>Заголовок<input v-model="section.title" maxlength="300"></label><label>Текст<textarea v-model="section.text" rows="4" maxlength="20000"></textarea></label></template>
       <template v-if="section.type !== 'text' && section.type !== 'code' && section.type !== 'form'">
         <MediaPicker :disabled="disabled||uploading" @select="section.image_url=$event" />
