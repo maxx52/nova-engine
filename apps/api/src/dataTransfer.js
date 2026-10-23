@@ -12,17 +12,18 @@ const hash=v=>createHash('sha256').update(JSON.stringify(stable(v))).digest('hex
 const keyField={products:'sku',customers:'phone',pages:'slug',posts:'slug'}
 const object=v=>v&&typeof v==='object'&&!Array.isArray(v)
 export async function initDataTransfer(db){await db.query(`CREATE TABLE IF NOT EXISTS data_imports(id UUID PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES admin_accounts(id) ON DELETE CASCADE,kind TEXT NOT NULL,plan JSONB NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '30 minutes',applied_at TIMESTAMPTZ,result JSONB)`);await db.query('CREATE INDEX IF NOT EXISTS data_imports_expiry_idx ON data_imports(expires_at)')}
-function clean(kind,row){const r=Object.fromEntries(transferFields[kind].map(k=>[k,row[k]]));if(kind==='products')r.price=Number(r.price);return r}
+function clean(kind,row){const r=Object.fromEntries(transferFields[kind].map(k=>[k,row[k]]));if(kind==='products')r.price=Number(r.price);if(kind==='posts')r.published_at=r.published_at?new Date(r.published_at).toISOString():null;return r}
 async function rows(db,kind,keys){if(!Object.hasOwn(transferKinds,kind))fail(400,'Неизвестный тип данных');return (await db.query('SELECT id::text,'+(['products','customers'].includes(kind)?'revision::text':'updated_at::text')+' AS _version,'+transferFields[kind].join(',')+' FROM '+kind+' WHERE '+(kind==='products'?'btrim(sku)':keyField[kind])+'=ANY($1::text[]) ORDER BY id',[keys])).rows}
 const fingerprint=(kind,row)=>hash({record:clean(kind,row),version:row._version})
 const hasNull=v=>{const stack=[v];let nodes=0;while(stack.length){if(++nodes>100000)fail(400,'Слишком сложная структура записи');const x=stack.pop();if(typeof x==='string'&&x.includes('\0'))return true;if(x&&typeof x==='object')stack.push(...Object.values(x))}return false}
 function canonical(kind,raw,existing){
  if(hasNull(raw))return {error:'Нулевой символ недопустим в данных'}
- const defaults={products:{description:'',sku:'',stock:0,image_url:'',published:false,images:[],attributes:[],variants:[],seo:normalizedSeo()},customers:{email:'',note:''},pages:{content:'',published:false,sections:[],seo:normalizedSeo()},posts:{excerpt:'',content:'',category:'',tags:[],cover_url:'',published:false,seo:normalizedSeo()}}
+ const defaults={products:{description:'',sku:'',stock:0,image_url:'',published:false,images:[],attributes:[],variants:[],seo:normalizedSeo()},customers:{email:'',note:''},pages:{content:'',published:false,sections:[],seo:normalizedSeo()},posts:{excerpt:'',content:'',category:'',tags:[],cover_url:'',published:false,published_at:null,seo:normalizedSeo()}}
  const r={...defaults[kind],...(existing?clean(kind,existing):{}),...raw}
  if(kind==='customers'){r.phone=normalizePhone(r.phone);if(typeof r.name!=='string'||!r.name.trim()||r.name.length>150||!r.phone||!validEmail(r.email)||typeof r.note!=='string'||r.note.length>5000)return {error:'Проверьте имя, телефон, email и заметку покупателя'}}
  const validator={products:validateProduct,pages:validatePage,posts:validatePost}[kind],error=validator?.(r);if(error)return {error}
  for(const k of ['name','title','category','email','sku'])if(typeof r[k]==='string')r[k]=r[k].trim()
+ if(kind==='posts'){if(r.published_at!==null&&(typeof r.published_at!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(r.published_at)||!Number.isFinite(Date.parse(r.published_at))||new Date(r.published_at).toISOString().slice(0,19)!==r.published_at.slice(0,19)))return {error:'published_at: укажите дату UTC в формате ISO или null'};if(r.published&&!r.published_at)r.published_at=new Date().toISOString();else if(r.published_at)r.published_at=new Date(r.published_at).toISOString()}
  if(kind!=='customers')r.seo=normalizedSeo(r.seo)
  return {record:r}
 }
@@ -54,10 +55,9 @@ async function writeRecord(db,kind,step){
  const record=step.record,fields=transferFields[kind],jsonFields=['images','attributes','variants','sections','tags','seo'],args=fields.map(k=>jsonFields.includes(k)?JSON.stringify(record[k]):record[k])
  if(step.action==='unchanged')return
  if(step.action==='create'){
-  const extras=kind==='posts'?',published_at':'',values=fields.map((_,i)=>'$'+(i+1)).join(',')+(kind==='posts'?',CASE WHEN $'+(fields.indexOf('published')+1)+'::boolean THEN NOW() ELSE NULL END':'')
-  await db.query('INSERT INTO '+kind+' ('+fields.join(',')+extras+') VALUES('+values+')',args)
+  await db.query('INSERT INTO '+kind+' ('+fields.join(',')+') VALUES('+fields.map((_,i)=>'$'+(i+1)).join(',')+')',args)
  }else{
-  const extra=kind==='products'||kind==='customers'?',revision=revision+1':kind==='posts'?',published_at=CASE WHEN $'+(fields.indexOf('published')+1)+'::boolean THEN COALESCE(published_at,NOW()) ELSE published_at END':''
+  const extra=kind==='products'||kind==='customers'?',revision=revision+1':''
   await db.query('UPDATE '+kind+' SET '+fields.map((k,i)=>k+'=$'+(i+1)).join(',')+extra+',updated_at=NOW() WHERE id=$'+(args.length+1),[...args,step.id])
  }
  if(kind==='products')await db.query('INSERT INTO categories(name) VALUES($1) ON CONFLICT(name) DO NOTHING',[record.category])

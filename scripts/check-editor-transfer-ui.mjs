@@ -24,7 +24,7 @@ export async function runEditorTransferChecks(page){
  await page.getByRole('button',{name:'＋ HTML / CSS / JavaScript',exact:true}).click()
  const code=page.locator('.section-editor').nth(3)
  await code.getByLabel('Код html',{exact:true}).fill('<section><h2>Code preview</h2></section>')
- await code.getByLabel('Файл',{exact:true}).selectOption('js')
+ await code.getByLabel('Файл секции',{exact:true}).selectOption('js')
  await code.getByLabel('Код js',{exact:true}).fill("document.querySelector('h2').textContent='Code executed safely';try{parent.document.body.dataset.ciEscaped='yes'}catch{}")
  await page.getByRole('button',{name:'Мобильный предпросмотр',exact:true}).click()
  const preview=page.frameLocator('iframe[title="Предпросмотр страницы"]')

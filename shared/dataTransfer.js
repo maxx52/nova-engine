@@ -1,5 +1,5 @@
 export const transferKinds={products:'Товары',customers:'Покупатели',pages:'Страницы',posts:'Статьи блога'}
-export const transferFields={products:['name','category','price','description','sku','stock','image_url','published','images','attributes','variants','seo'],customers:['name','phone','email','note'],pages:['title','slug','content','published','sections','seo'],posts:['title','slug','excerpt','content','category','tags','cover_url','published','seo']}
+export const transferFields={products:['name','category','price','description','sku','stock','image_url','published','images','attributes','variants','seo'],customers:['name','phone','email','note'],pages:['title','slug','content','published','sections','seo'],posts:['title','slug','excerpt','content','category','tags','cover_url','published','published_at','seo']}
 // RFC 4180 quoting, BOM, CRLF and semicolon tables from Russian spreadsheet tools.
 export function parseCsv(text){
  text=text.replace(/^\uFEFF/,'');const first=text.split(/\r?\n/,1)[0],delimiter=first.includes(';')?';':','

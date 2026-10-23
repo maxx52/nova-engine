@@ -68,7 +68,8 @@ test('PostgreSQL transfer and section library: preview isolation, conflict check
  await t.test('content and customer imports roundtrip; customer changes preserve order contact snapshots',async()=>{
   let r=await preview('customers',[{name:'Updated customer',phone:'8 (999) 111-22-33',email:'new@example.invalid',note:'Import note'}],'merge');assert.equal(r.valid,true);assert.equal(r.summary.update,1);assert.equal((await apply(r.id)).statusCode,200);assert.equal((await query('SELECT customer_name FROM orders LIMIT 1')).rows[0].customer_name,'Buyer')
   r=await preview('pages',[{title:'Imported page',slug:'imported-page',content:'Safe plain text <script>not executed</script>',sections:[textSection('Saved block')],published:false}]);assert.equal((await apply(r.id)).statusCode,200)
-  r=await preview('posts',[{title:'Imported post',slug:'imported-post',excerpt:'Intro',content:'Body',category:'News',tags:['One'],cover_url:'',published:false}]);assert.equal((await apply(r.id)).statusCode,200)
+  r=await preview('posts',[{title:'Imported post',slug:'imported-post',excerpt:'Intro',content:'Body',category:'News',tags:['One'],cover_url:'',published:false,published_at:'2020-02-01T10:00:00.000Z'}]);assert.equal((await apply(r.id)).statusCode,200)
+  assert.equal(new Date((await query("SELECT published_at FROM posts WHERE slug='imported-post'")).rows[0].published_at).toISOString(),'2020-02-01T10:00:00.000Z')
   for(const kind of ['pages','posts','customers']){const exported=(await call('GET','/api/admin/transfer/export?kind='+kind)).json();r=await preview(kind,exported.records,'merge');assert.equal(r.valid,true);assert.equal(r.summary.unchanged,exported.records.length);assert.equal((await apply(r.id)).statusCode,200)}
  })
  await t.test('failure after a first write rolls back the whole file; concurrent replay applies once',async()=>{
