@@ -1,3 +1,4 @@
+import {registerPublicationWorker} from './contentPublishing.js'
 import {registerPageLibrary} from './pageLibrary.js'
 import {registerDataTransfer} from './dataTransfer.js'
 import {validateProduct} from '../../../shared/products.js'
@@ -54,6 +55,7 @@ registerSystem(app,requireAdmin)
 registerCodeFrame(app)
 registerSettings(app, pool, requireAdmin)
 registerBlog(app, pool, requireAdmin)
+registerPublicationWorker(app,pool)
 registerShopGuard(app,pool,isAdmin)
 const publicOrigins=[...security.origins,...(security.production?[]:['http://localhost:5173','http://127.0.0.1:5173'])]
 const analytics=registerAnalytics(app,pool,requireAdmin,isAdmin,{secret:adminKey,origins:publicOrigins})

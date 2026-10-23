@@ -1,3 +1,4 @@
+import {registerContentPublishing,allowEditorContentWrite} from './contentPublishing.js'
 import {checkContentReferences} from './pageLibrary.js'
 import {registerContentLifecycle,contentTransaction,contentRevision,contentConflict} from './contentLifecycle.js'
 import {validateSeo,normalizedSeo} from '../../../shared/seo.js'
@@ -16,6 +17,7 @@ export function registerBlog(app,pool,requireAdmin) {
  const fields='id::text,title,slug,excerpt,content,category,tags,cover_url,published,published_at,updated_at,seo,revision::text,deleted_at'
  async function enabled(req,reply){if(!(await readSettings(pool)).blog_enabled)return reply.code(404).send({error:'Блог отключён'})}
  registerContentLifecycle(app,pool,requireAdmin,'posts')
+  registerContentPublishing(app,pool,requireAdmin,'posts')
  app.get('/api/admin/posts',{preHandler:requireAdmin},async req=> (await pool.query(`SELECT ${fields} FROM posts WHERE deleted_at IS ${req.query.trash==='1'?'NOT NULL':'NULL'} ORDER BY updated_at DESC,id DESC`)).rows)
  app.get('/api/blog',{preHandler:enabled},async(req,reply)=>{
   const {page='1',category='',tag=''}=req.query
@@ -40,6 +42,7 @@ export function registerBlog(app,pool,requireAdmin) {
   const args=[title.trim(),slug,excerpt,content,category.trim(),JSON.stringify(tags.map(t=>t.trim())),cover_url,published,(method==='PUT'&&req.body.seo===undefined?null:JSON.stringify(normalizedSeo(req.body.seo)))]
   try {
    return await contentTransaction(pool,req,reply,async (db,reply)=>{
+        if(!await allowEditorContentWrite(db,req,reply,'posts'))return
         const missing=await checkContentReferences(db,req.body);if(missing)return reply.code(400).send({error:missing})
    const result=method==='POST'
     ? await db.query(`INSERT INTO posts (title,slug,excerpt,content,category,tags,cover_url,published,seo,published_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,CASE WHEN $8 THEN NOW() ELSE NULL END) RETURNING ${fields}`,args)

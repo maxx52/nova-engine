@@ -22,9 +22,15 @@ export async function initContentLifecycle(db) {
  DECLARE label TEXT;
  BEGIN
   IF TG_OP='DELETE' THEN
+   DELETE FROM content_publications WHERE kind=TG_TABLE_NAME AND record_id=OLD.id;
    DELETE FROM content_versions WHERE kind=TG_TABLE_NAME AND record_id=OLD.id;
    DELETE FROM content_drafts WHERE kind=TG_TABLE_NAME AND record_key=OLD.id::text;
    RETURN OLD;
+  END IF;
+  IF TG_OP='UPDATE' THEN
+   UPDATE content_publications SET state='stale',failure='Материал изменён после отправки',revision=revision+1,updated_at=clock_timestamp()
+    WHERE kind=TG_TABLE_NAME AND record_id=NEW.id AND base_revision<>NEW.revision AND state IN ('review','scheduled')
+     AND id IS DISTINCT FROM NULLIF(current_setting('nova.content_publication_id',TRUE),'')::uuid;
   END IF;
   label:=COALESCE(NULLIF(current_setting('nova.content_action',TRUE),''),'save');
   IF TG_OP='INSERT' THEN label:='create';

@@ -400,3 +400,5 @@ location = /api/payment-frame { include /etc/nova/code-frame-proxy.conf; }
 Редактор блоков, мобильный предпросмотр, сохранённые секции и перенос данных: [руководство](docs/PAGE_EDITOR_AND_TRANSFER.md).
 
 Автосохранение страниц и статей, история версий, корзина и защита от перезаписи: [руководство](docs/CONTENT_RECOVERY.md).
+
+Согласование материалов и отложенная публикация страниц и статей: [руководство](docs/CONTENT_PUBLISHING.md).

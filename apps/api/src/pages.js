@@ -1,3 +1,4 @@
+import {registerContentPublishing,allowEditorContentWrite} from './contentPublishing.js'
 import {checkContentReferences} from './pageLibrary.js'
 import {registerContentLifecycle,contentTransaction,contentRevision,contentConflict} from './contentLifecycle.js'
 import {validateSeo,normalizedSeo} from '../../../shared/seo.js'
@@ -18,6 +19,7 @@ export function validatePage(body) {
 export function registerPages(app, pool, requireAdmin) {
   const fields = 'id,title,slug,content,published,sections,updated_at,seo,revision::text,deleted_at'
   registerContentLifecycle(app,pool,requireAdmin,'pages')
+  registerContentPublishing(app,pool,requireAdmin,'pages')
   app.get('/api/admin/pages', { preHandler: requireAdmin }, async req => (await pool.query(`SELECT ${fields} FROM pages WHERE deleted_at IS ${req.query.trash==='1'?'NOT NULL':'NULL'} ORDER BY updated_at DESC,id DESC`)).rows)
   app.get('/api/pages', async () => (await pool.query('SELECT title,slug FROM pages WHERE published=TRUE AND deleted_at IS NULL ORDER BY title')).rows)
   app.get('/api/pages/:slug', async (req, reply) => {
@@ -36,6 +38,7 @@ export function registerPages(app, pool, requireAdmin) {
       try {
         const args = [title.trim(), slug, content, published, JSON.stringify(sections),(method==='PUT'&&req.body.seo===undefined?null:JSON.stringify(normalizedSeo(req.body.seo)))]
         return await contentTransaction(pool,req,reply,async (db,reply)=>{
+        if(!await allowEditorContentWrite(db,req,reply,'pages'))return
         const missing=await checkContentReferences(db,req.body);if(missing)return reply.code(400).send({error:missing})
         const result = method === 'POST'
           ? await db.query(`INSERT INTO pages (title,slug,content,published,sections,seo) VALUES ($1,$2,$3,$4,$5,$6) RETURNING ${fields}`, args)

@@ -1,11 +1,11 @@
 import {reactive,watch,onBeforeUnmount} from 'vue'
-import {adminFetch} from './adminApi.js'
+import {adminFetch,auth} from './adminApi.js'
 const clone=value=>JSON.parse(JSON.stringify(value))
 const fields={pages:['title','slug','content','sections','seo','published'],posts:['title','slug','excerpt','content','category','tags','cover_url','seo','published']}
 export function useContentEditor(kind,load,emit) {
  const base='/api/admin/'+kind
- const e=reactive({form:null,busy:false,error:'',status:'',pending:null,conflict:null,versions:[],historical:null,draftRevision:'0',blocked:false})
- let timer,baseline='',savedDraft='',generation=0,inflight=null,ready=false,key='new'
+ const e=reactive({form:null,busy:false,error:'',status:'',pending:null,conflict:null,versions:[],historical:null,draftRevision:'0',blocked:false,notice:'',isEditor:auth.user?.role==='editor',liveAtOpen:false})
+ let timer,baseline='',savedDraft='',generation=0,inflight=null,ready=false,key='new',submissionKey='',submissionId=''
  const payload=()=>Object.fromEntries(fields[kind].filter(k=>e.form?.[k]!==undefined).map(k=>[k,clone(e.form[k])]))
  const text=()=>e.form?JSON.stringify({payload:payload(),base_revision:e.form.revision||null}):''
  const unsaved=()=>Boolean(e.form&&text()!==baseline&&text()!==savedDraft)
@@ -49,13 +49,14 @@ export function useContentEditor(kind,load,emit) {
    key=String(current?.id||'new')
    const draft=await request(base+'/drafts/'+key)
    ready=false;generation++;e.form=current;e.conflict=null;e.historical=null;e.versions=[];e.pending=draft;e.blocked=false
-   e.draftRevision=draft?.revision||'0';baseline=text();savedDraft='';e.status=draft?'Найден ваш личный черновик':'Изменений нет';ready=true;changed()
+   e.liveAtOpen=Boolean(current?.published);e.notice='';e.draftRevision=draft?.revision||'0';baseline=text();savedDraft='';e.status=draft?'Найден ваш личный черновик':'Изменений нет';ready=true;changed()
   }catch(err){e.error=err.message}finally{e.busy=false}
  }
  function recover() {
   if(!e.pending)return
   const d=e.pending;e.pending=null
   Object.assign(e.form,clone(d.payload),{revision:d.base_revision||undefined})
+  if(e.isEditor)e.form.published=e.liveAtOpen
   savedDraft=text();e.status='Личный черновик восстановлен';changed()
  }
  async function discardDraft() {
@@ -72,13 +73,32 @@ export function useContentEditor(kind,load,emit) {
  async function save() {
   if(e.busy||e.pending||e.blocked)return
   // Finish outstanding autosaves before removing exactly that draft revision.
-  e.busy=true;e.error='';await flush()
+  e.busy=true;e.error='';const draftOk=await flush()
+  if(e.isEditor&&e.liveAtOpen){
+   if(draftOk){ready=false;generation++;e.form=null;e.notice='Личный черновик сохранён. Для публикации откройте его и отправьте на согласование.';changed()}else e.error='Не удалось сохранить личный черновик. '+e.status
+   e.busy=false;return
+  }
   if(e.blocked){e.busy=false;return}
   try {
    const result=await request(base+(e.form.id?'/'+e.form.id:''),e.form.id?'PUT':'POST',{...payload(),...(e.form.id?{revision:e.form.revision}:{})})
    // A different tab's work must never be cleared by this save.
    if(e.draftRevision!=='0')try{await request(base+'/drafts/'+key,'DELETE',{revision:e.draftRevision})}catch{}
    ready=false;generation++;e.form=null;e.conflict=null;e.status='';changed();await load();return result
+  }catch(err){e.error=err.message;if(err.code==='content_conflict')e.conflict=err.current}finally{e.busy=false}
+ }
+ async function submitPublication(mode,localTime) {
+  if(e.busy||e.pending||e.blocked||!e.form?.id)return
+  e.busy=true;e.error=''
+  try {
+   await flush();if(e.blocked)return
+   const publish_at=localTime?new Date(localTime).toISOString():null
+   const body={revision:e.form.revision,payload:{...payload(),published:true},mode,publish_at}
+   const signature=JSON.stringify(body)
+   if(signature!==submissionKey){submissionKey=signature;submissionId=crypto.randomUUID()}
+   await request(base+'/'+e.form.id+'/publications','POST',{...body,request_id:submissionId})
+   ready=false;generation++;e.form=null;e.conflict=null;changed()
+   e.notice=mode==='review'?'Материал отправлен на согласование. Опубликованный текст не изменён.':'Публикация запланирована. До выбранного времени сайт показывает прежний текст.'
+   await load()
   }catch(err){e.error=err.message;if(err.code==='content_conflict')e.conflict=err.current}finally{e.busy=false}
  }
  async function history() {
@@ -110,5 +130,5 @@ export function useContentEditor(kind,load,emit) {
  function beforeUnload(event){if(unsaved()){event.preventDefault();event.returnValue=''}}
  window.addEventListener('beforeunload',beforeUnload)
  onBeforeUnmount(()=>{clearTimeout(timer);ready=false;generation++;window.removeEventListener('beforeunload',beforeUnload);emit?.('dirty',false)})
- return Object.assign(e,{open,save,close,flush,recover,discardDraft,history,inspect,useVersion,keepLocal,loadServer,trash})
+ return Object.assign(e,{open,save,close,flush,recover,discardDraft,history,inspect,useVersion,keepLocal,loadServer,trash,submitPublication})
 }

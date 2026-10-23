@@ -1,3 +1,4 @@
+import {initContentPublishing} from './contentPublishing.js'
 import {initContentLifecycle} from './contentLifecycle.js'
 import {initPageLibrary} from './pageLibrary.js'
 import {initDataTransfer} from './dataTransfer.js'
@@ -108,6 +109,7 @@ export async function initDatabase() {
   await initSeo(pool)
   await initPageLibrary(pool)
   await initDataTransfer(pool)
+  await initContentPublishing(pool)
   await initContentLifecycle(pool)
   await initMediaSchema(pool)
 }
