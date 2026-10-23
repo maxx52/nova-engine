@@ -112,7 +112,6 @@ onMounted(async () => {
     const settingsResponse=await fetch('/api/settings')
     if(!settingsResponse.ok)throw Error('Не удалось загрузить настройки сайта')
     siteSettings.value=await settingsResponse.json()
-    document.title=siteSettings.value.name
     const designResponse=await fetch('/api/design')
     if(designResponse.ok)design.value=designValue(await designResponse.json())
     else if(designResponse.status!==404)throw Error('Не удалось загрузить оформление')

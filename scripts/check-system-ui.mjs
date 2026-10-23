@@ -59,6 +59,7 @@ try{
  status.current_version=PRODUCT_VERSION;status.installed_version=PRODUCT_VERSION
  await page.getByRole('button',{name:'Проверить релизы',exact:true}).click()
  await page.getByText('Установленная версия: '+PRODUCT_VERSION,{exact:true}).waitFor()
+ await (await import('./check-seo-ui.mjs')).runSeoChecks(page)
  await (await import('./check-identity-ui.mjs')).runIdentityChecks(page)
  assert.deepEqual(errors,[])
  console.log('PASS system UI: release notes escaped, update is explicit, backup/schedule commands valid, restore requires typed confirmation, mobile width fits; completed update refreshes the admin once')

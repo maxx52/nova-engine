@@ -390,3 +390,7 @@ location = /api/payment-frame { include /etc/nova/code-frame-proxy.conf; }
 ### Доступ пользователей и безопасность
 
 В NOVA Engine доступны несколько учётных записей, роли владельца, администратора, редактора и менеджера, двухфакторный вход и журнал действий. Инструкция и матрица прав: [docs/ACCESS.md](docs/ACCESS.md).
+
+### SEO и перенаправления
+
+Метатеги страниц, товаров и статей, Open Graph, canonical, sitemap.xml, robots.txt, HTTP-редиректы и Schema.org: [docs/SEO.md](docs/SEO.md). Для существующего nginx требуется однократное подключение публичных страниц к API.

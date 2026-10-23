@@ -1,3 +1,5 @@
+import {registerSeo} from './seo.js'
+import {validateSeo,normalizedSeo} from '../../../shared/seo.js'
 import {registerSystem} from './system.js'
 import {PRODUCT_VERSION} from '../../../config/release.js'
 import {registerThemes} from './themes.js'
@@ -23,13 +25,13 @@ import { fileURLToPath } from 'node:url'
 import { pool, initDatabase, productJson } from './db.js'
 config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) })
 const security=securityConfig()
-const app = Fastify({logger:{level:process.env.LOG_LEVEL||'info',serializers:{req:req=>({method:req.method,url:req.url?.split('?')[0],remoteAddress:req.ip})},redact:['req.headers.cookie','req.headers["x-admin-key"]','req.headers["x-csrf-token"]','password','setup_key','current_password','new_password']},trustProxy:security.trustProxy,bodyLimit:2*1024*1024,routerOptions:{maxParamLength:200},requestTimeout:15000,connectionTimeout:10000,keepAliveTimeout:5000})
+const app = Fastify({logger:{level:process.env.LOG_LEVEL||'info',serializers:{req:req=>({method:req.method,url:req.url?.split('?')[0],remoteAddress:req.ip})},redact:['req.headers.cookie','req.headers["x-admin-key"]','req.headers["x-csrf-token"]','password','setup_key','current_password','new_password']},trustProxy:security.trustProxy,bodyLimit:2*1024*1024,routerOptions:{maxParamLength:2000},requestTimeout:15000,connectionTimeout:10000,keepAliveTimeout:5000})
 app.server.headersTimeout=10000
 registerSecurity(app,{secure:security.secure})
 await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files:1,fields:0,parts:1 } })
 const uploadDirectory = process.env.UPLOAD_DIRECTORY?resolve(process.env.UPLOAD_DIRECTORY):fileURLToPath(new URL('../../../uploads/', import.meta.url))
 await mkdir(uploadDirectory, { recursive: true })
-const productFields = 'id,name,category,price,description,sku,stock,image_url,published,images,attributes,variants,revision::text'
+const productFields = 'id,name,category,price,description,sku,stock,image_url,published,images,attributes,variants,revision::text,seo'
 const adminKey = process.env.ADMIN_API_KEY
 if (!adminKey || adminKey.length < 16) {
   console.error('Set ADMIN_API_KEY (at least 16 characters) in .env before starting API')
@@ -51,8 +53,10 @@ const analytics=registerAnalytics(app,pool,requireAdmin,isAdmin,{secret:adminKey
 registerForms(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins})
 const payments=registerPayments(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins})
 registerCommerce(app,pool,requireAdmin,{origins:publicOrigins,attribute:analytics.attribute,receipt:payments.receipt})
+registerSeo(app,pool,requireAdmin,{fallbackOrigin:process.env.PUBLIC_SITE_URL||(security.production?security.origins[0]:'http://localhost:5173')})
 
 function validateProduct(body) {
+  const seoError=validateSeo(body?.seo);if(seoError)return seoError
   if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 150) return 'Название: от 1 до 150 символов'
   if (typeof body.category !== 'string' || !body.category.trim() || body.category.trim().length > 100) return 'Укажите категорию'
   if (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price < 0 || body.price > 9999999999.99) return 'Некорректная цена'
@@ -83,7 +87,7 @@ app.post('/api/products', { preHandler: requireAdmin }, async (request, reply) =
   const err = validateProduct(request.body)
   if (err) return reply.code(400).send({ error: err })
   const { name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[],attributes=[],variants=[] } = request.body
-  const result = await pool.query('INSERT INTO products (name,category,price,description,sku,stock,image_url,published,images,attributes,variants) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants)])
+  const result = await pool.query('INSERT INTO products (name,category,price,description,sku,stock,image_url,published,images,attributes,variants,seo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants),JSON.stringify(normalizedSeo(request.body.seo))])
   return reply.code(201).send(productJson(result.rows[0]))
 })
 app.put('/api/products/:id', { preHandler: requireAdmin }, async (request, reply) => {
@@ -93,7 +97,7 @@ app.put('/api/products/:id', { preHandler: requireAdmin }, async (request, reply
   if (err) return reply.code(400).send({ error: err })
   if(typeof request.body.revision!=='string'||! /^[1-9][0-9]{0,17}$/.test(request.body.revision))return reply.code(409).send({error:'Обновите карточку товара перед сохранением'})
   const {name,category,price,description,sku='',stock=0,image_url='',published=true,images=image_url?[image_url]:[],attributes=[],variants=[]}=request.body
-  const result = await pool.query('UPDATE products SET name=$1,category=$2,price=$3,description=$4,sku=$5,stock=$6,image_url=$7,published=$8,images=$9,attributes=$10,variants=$11,revision=revision+1,updated_at=NOW() WHERE id=$12 AND revision=$13 RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants),id,request.body.revision])
+  const result = await pool.query('UPDATE products SET name=$1,category=$2,price=$3,description=$4,sku=$5,stock=$6,image_url=$7,published=$8,images=$9,attributes=$10,variants=$11,seo=COALESCE($14::jsonb,seo),revision=revision+1,updated_at=NOW() WHERE id=$12 AND revision=$13 RETURNING '+productFields,[name.trim(),category.trim(),price,description,sku,stock,image_url,published,JSON.stringify(images),JSON.stringify(attributes),JSON.stringify(variants),id,request.body.revision,request.body.seo===undefined?null:JSON.stringify(normalizedSeo(request.body.seo))])
   if (!result.rowCount) return reply.code(409).send({error:'Товар изменился, возможно оформлен заказ. Откройте карточку заново.'})
   return productJson(result.rows[0])
 })

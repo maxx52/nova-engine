@@ -50,9 +50,10 @@ server {
         add_header Cache-Control "no-cache" always;
         try_files $uri $uri/ /admin/index.html;
     }
+    location /assets/ { try_files $uri =404; }
+    location = /favicon.ico { try_files $uri =404; }
+    # HTML, robots.txt, sitemap and redirects come from NOVA, not index.html.
     location / {
-        include /srv/nova/app/deploy/security-headers.conf;
-        add_header Cache-Control "no-cache" always;
-        try_files $uri $uri/ /index.html;
+        include /srv/nova/app/deploy/seo-proxy.conf;
     }
 }

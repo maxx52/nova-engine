@@ -34,9 +34,13 @@ export async function initMediaSchema(source){
    PERFORM nova_media_check(NEW.logo_url);
    FOR item IN SELECT jsonb_array_elements(NEW.menu) LOOP PERFORM nova_media_check(item->>'url'); END LOOP;
   END IF;
+  IF TG_TABLE_NAME IN ('pages','products','posts') THEN PERFORM nova_media_check(NEW.seo->>'image_url'); END IF;
+  IF TG_TABLE_NAME='seo_settings' THEN
+   PERFORM nova_media_check(NEW.config->'home'->>'image_url'); PERFORM nova_media_check(NEW.config->'catalog'->>'image_url'); PERFORM nova_media_check(NEW.config->'blog'->>'image_url');
+  END IF;
   RETURN NEW;
  END $$`)
- for(const [table,columns]of [['products','image_url,images'],['pages','sections'],['posts','cover_url'],['site_settings','logo_url,menu'],['site_design','draft,published']]){
+ for(const [table,columns]of [['products','image_url,images,seo'],['pages','sections,seo'],['posts','cover_url,seo'],['seo_settings','config'],['site_settings','logo_url,menu'],['site_design','draft,published']]){
   await pool.query(`DROP TRIGGER IF EXISTS nova_media_refs ON ${table}`)
   await pool.query(`CREATE TRIGGER nova_media_refs BEFORE INSERT OR UPDATE OF ${columns} ON ${table} FOR EACH ROW EXECUTE FUNCTION nova_media_references()`)
  }

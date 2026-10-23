@@ -1,18 +1,20 @@
+import {validateSeo,normalizedSeo} from '../../../shared/seo.js'
 import {validateSections} from '../../../shared/pageSections.js'
 export {validateSections} from '../../../shared/pageSections.js'
 export {safeLink} from '../../../shared/contentSafety.js'
 import {safeLink} from '../../../shared/contentSafety.js'
 export function validatePage(body) {
+  const seoError=validateSeo(body?.seo);if(seoError)return seoError
   if (!body || typeof body.title !== 'string' || !body.title.trim() || body.title.length > 150) return 'Заголовок: от 1 до 150 символов'
   if (typeof body.slug !== 'string' || body.slug.length > 120 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug)) return 'Адрес: латинские буквы, цифры и дефисы'
-  if (['api','uploads','product','admin','catalog','blog'].includes(body.slug)) return 'Этот адрес зарезервирован'
+  if (['api','uploads','assets','product','admin','catalog','blog','health'].includes(body.slug)) return 'Этот адрес зарезервирован'
   if (typeof body.content !== 'string' || body.content.length > 100000) return 'Текст: до 100 000 символов'
   if (typeof body.published !== 'boolean') return 'Укажите статус публикации'
   if (body.sections !== undefined) return validateSections(body.sections)
   return null
 }
 export function registerPages(app, pool, requireAdmin) {
-  const fields = 'id,title,slug,content,published,sections,updated_at'
+  const fields = 'id,title,slug,content,published,sections,updated_at,seo'
   app.get('/api/admin/pages', { preHandler: requireAdmin }, async () => (await pool.query(`SELECT ${fields} FROM pages ORDER BY updated_at DESC,id DESC`)).rows)
   app.get('/api/pages', async () => (await pool.query('SELECT title,slug FROM pages WHERE published=TRUE ORDER BY title')).rows)
   app.get('/api/pages/:slug', async (req, reply) => {
@@ -28,10 +30,10 @@ export function registerPages(app, pool, requireAdmin) {
       if (error) return reply.code(400).send({ error })
       const { title, slug, content, published, sections = [] } = req.body
       try {
-        const args = [title.trim(), slug, content, published, JSON.stringify(sections)]
+        const args = [title.trim(), slug, content, published, JSON.stringify(sections),(method==='PUT'&&req.body.seo===undefined?null:JSON.stringify(normalizedSeo(req.body.seo)))]
         const result = method === 'POST'
-          ? await pool.query(`INSERT INTO pages (title,slug,content,published,sections) VALUES ($1,$2,$3,$4,$5) RETURNING ${fields}`, args)
-          : await pool.query(`UPDATE pages SET title=$1,slug=$2,content=$3,published=$4,sections=$5,updated_at=NOW() WHERE id=$6 RETURNING ${fields}`, [...args, req.params.id])
+          ? await pool.query(`INSERT INTO pages (title,slug,content,published,sections,seo) VALUES ($1,$2,$3,$4,$5,$6) RETURNING ${fields}`, args)
+          : await pool.query(`UPDATE pages SET title=$1,slug=$2,content=$3,published=$4,sections=$5,seo=COALESCE($6::jsonb,seo),updated_at=NOW() WHERE id=$7 RETURNING ${fields}`, [...args, req.params.id])
         if (!result.rowCount) return reply.code(404).send({ error: 'Страница не найдена' })
         return reply.code(method === 'POST' ? 201 : 200).send(result.rows[0])
       } catch (e) {

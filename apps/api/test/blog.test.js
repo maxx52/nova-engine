@@ -14,7 +14,7 @@ test('blog HTTP workflow: drafts, publication, filters, conflicts, disable and d
   if(sql.includes('FROM site_settings'))return {rows:[{blog_enabled:enabled}]}
   if(sql.startsWith('INSERT INTO posts')||sql.startsWith('UPDATE posts')){
    const [title,slug,excerpt,content,category,tags,cover_url,published]=args
-   const id=sql.startsWith('UPDATE')?args[8]:String(posts.length+1)
+   const id=sql.startsWith('UPDATE')?args[9]:String(posts.length+1)
    if(posts.some(p=>p.slug===slug&&p.id!==id))throw Object.assign(new Error('duplicate'),{code:'23505'})
    const row={id,title,slug,excerpt,content,category,tags:JSON.parse(tags),cover_url,published,published_at:published?'2026-10-16T00:00:00Z':null}
    const index=posts.findIndex(p=>p.id===id)

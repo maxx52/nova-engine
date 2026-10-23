@@ -10,10 +10,11 @@ export async function syncMedia(pool,directory){
  for(const row of (await pool.query('SELECT url FROM media_files WHERE deleted_at IS NOT NULL')).rows){if(!mediaName.test(row.url.slice('/uploads/'.length)))continue;try{await unlink(join(directory,row.url.slice('/uploads/'.length)))}catch(e){if(e.code!=='ENOENT')throw e}}
 }
 export async function mediaUsage(db,url){
- const result=await db.query(`SELECT 'product' AS type,id::text,name AS title FROM products WHERE image_url=$1 OR images ? $1
- UNION ALL SELECT 'page',p.id::text,p.title FROM pages p WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(p.sections) s WHERE s->>'image_url'=$1 OR nova_media_path(s->>'button_url')=$1 OR (s->>'type'='code' AND position($1 in s::text)>0))
- UNION ALL SELECT 'post',id::text,title FROM posts WHERE cover_url=$1
+ const result=await db.query(`SELECT 'product' AS type,id::text,name AS title FROM products WHERE image_url=$1 OR images ? $1 OR seo->>'image_url'=$1
+ UNION ALL SELECT 'page',p.id::text,p.title FROM pages p WHERE p.seo->>'image_url'=$1 OR EXISTS(SELECT 1 FROM jsonb_array_elements(p.sections) s WHERE s->>'image_url'=$1 OR nova_media_path(s->>'button_url')=$1 OR (s->>'type'='code' AND position($1 in s::text)>0))
+ UNION ALL SELECT 'post',id::text,title FROM posts WHERE cover_url=$1 OR seo->>'image_url'=$1
  UNION ALL SELECT 'design',id::text,'Оформление сайта' FROM site_design WHERE position($1 in draft::text)>0 OR position($1 in published::text)>0
+ UNION ALL SELECT 'seo',id::text,'SEO-настройки' FROM seo_settings WHERE config->'home'->>'image_url'=$1 OR config->'catalog'->>'image_url'=$1 OR config->'blog'->>'image_url'=$1
  UNION ALL SELECT 'settings',id::text,name FROM site_settings WHERE logo_url=$1 OR EXISTS(SELECT 1 FROM jsonb_array_elements(menu) m WHERE nova_media_path(m->>'url')=$1)`,[url])
  return result.rows
 }

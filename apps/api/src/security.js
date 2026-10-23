@@ -31,7 +31,8 @@ export function registerSecurity(app,{secure=false,now=()=>Date.now(),perIp=240,
   bucket.count++;global.count++;buckets.set(req.ip,bucket)
  })
  app.addHook('onSend',async(req,reply,payload)=>{
-  const headers=httpHeaders({https:secure,asset:true})
+  const headers=httpHeaders({https:secure,asset:!req.novaSeoNonce})
+  if(req.novaSeoNonce)headers['Content-Security-Policy']=headers['Content-Security-Policy'].replace("script-src 'self'","script-src 'self' 'nonce-"+req.novaSeoNonce+"'")
   if(req.routeOptions.config?.novaCodeFrame&&reply.statusCode===200){headers['Content-Security-Policy']=reply.getHeader('Content-Security-Policy');headers['X-Frame-Options']='SAMEORIGIN'}
   if(req.url.startsWith('/uploads/')&&reply.statusCode===200)headers['Cross-Origin-Resource-Policy']='cross-origin'
   for(const [key,value]of Object.entries(headers))reply.header(key,value)

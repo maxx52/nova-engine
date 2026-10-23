@@ -1,3 +1,4 @@
+import {initSeo} from './seo.js'
 import {initIdentitySchema} from './identity.js'
 import {initThemes} from './themes.js'
 import {initForms} from './forms.js'
@@ -97,6 +98,7 @@ export async function initDatabase() {
   await initAnalytics(pool)
   await initDesign(pool)
   await initThemes(pool)
+  await initSeo(pool)
   await initMediaSchema(pool)
 }
 export function productJson(row) { return {...row,id:Number(row.id),price:Number(row.price)} }

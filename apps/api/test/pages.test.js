@@ -52,8 +52,8 @@ test('HTTP page writes persist ordered sections as JSON and require admin key', 
     const updated=await app.inject({method:'PUT',url:'/api/admin/pages/7',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[...payload.sections].reverse()}})
     assert.equal(updated.statusCode,200)
     assert.equal(updated.json().sections[0].id,'text-1')
-    assert.match(calls[1].sql,/sections=\$5.*WHERE id=\$6/)
-    assert.equal(calls[1].args[5],'7')
+    assert.match(calls[1].sql,/sections=\$5.*WHERE id=\$7/)
+    assert.equal(calls[1].args[6],'7')
     const rejected=await app.inject({method:'POST',url:'/api/admin/pages',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[{...section,button_url:'javascript:alert(1)'}]}})
     assert.equal(rejected.statusCode,400);assert.equal(calls.length,2)
   } finally { await app.close() }

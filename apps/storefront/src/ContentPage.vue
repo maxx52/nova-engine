@@ -14,8 +14,8 @@ watch(() => props.path, async path => {
     const response = await fetch('/api/pages/' + encodeURIComponent(slug))
     if (!response.ok) throw Error(response.status === 404 ? 'Страница не найдена' : 'Не удалось загрузить страницу')
     const data = await response.json()
-    if (current === version) { page.value = data; document.title = data.title + ' — ' + props.siteName }
-  } catch (e) { if (current === version) { error.value = e.message; document.title = 'NOVA — ' + e.message } }
+    if (current === version) { page.value = data }
+  } catch (e) { if (current === version) { error.value = e.message } }
   finally { if (current === version) loading.value = false }
 }, { immediate: true })
 </script>

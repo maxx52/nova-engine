@@ -17,8 +17,8 @@ async function load(number=page.value){
   const response=await fetch(isList.value?'/api/blog?'+query:'/api/blog/'+encodeURIComponent(slug))
   if(!response.ok)throw Error(response.status===404?'Статья или блог не найдены':'Не удалось загрузить блог')
   const result=await response.json();if(current!==version)return
-  if(isList.value){data.value=result;document.title='Блог — '+props.siteName;history.replaceState({},'',location.pathname+'?'+query)}
-  else{article.value=result;document.title=result.title+' — '+props.siteName}
+  if(isList.value){data.value=result;history.replaceState({},'',location.pathname+'?'+query)}
+  else{article.value=result}
  }catch(e){if(current===version)error.value=e.message}finally{if(current===version)loading.value=false}
 }
 watch(()=>props.path,()=>load(),{immediate:true})

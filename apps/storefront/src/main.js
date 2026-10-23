@@ -1,3 +1,4 @@
+import {startSeo} from './seo.js'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createVuetify } from 'vuetify'
@@ -8,3 +9,5 @@ import './style.css'
 
 const vuetify = createVuetify({ icons: { defaultSet: 'mdi' }, theme: { defaultTheme: 'light' } })
 createApp(App).use(createPinia()).use(vuetify).mount('#app')
+
+startSeo()
