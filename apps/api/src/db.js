@@ -1,3 +1,5 @@
+import {initPageLibrary} from './pageLibrary.js'
+import {initDataTransfer} from './dataTransfer.js'
 import {initFulfillment} from './fulfillment.js'
 import {initAutomaticPayments} from './automaticPayments.js'
 import {initSeo} from './seo.js'
@@ -103,6 +105,8 @@ export async function initDatabase() {
   await initDesign(pool)
   await initThemes(pool)
   await initSeo(pool)
+  await initPageLibrary(pool)
+  await initDataTransfer(pool)
   await initMediaSchema(pool)
 }
 export function productJson(row) { return {...row,id:Number(row.id),price:Number(row.price)} }
