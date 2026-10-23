@@ -64,6 +64,7 @@ test('publication approval and scheduling: immutable snapshots, roles, time, res
    assert.equal((await ok('GET','/api/pages/'+page.slug)).content,'Scheduled snapshot')
    assert.equal((await publishDueContent(f.db,{now})).published,0)
    current=await ok('GET','/api/admin/pages/'+current.id);assert.equal(current.revision,'3')
+   const events=(await query("SELECT * FROM admin_audit WHERE action='publication.publish' AND resource=$1",['/api/admin/pages/publications/'+job.id])).rows;assert.equal(events.length,1);assert.equal(events[0].user_id,1)
   })
   await t.test('content edits, imports, trash and cancellation invalidate the exact approved snapshot',async()=>{
    job=await submit(current,{...page,content:'Stale proposal'})

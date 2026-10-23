@@ -52,7 +52,7 @@ async function lockRecord(db,kind,id){return (await db.query(`SELECT *,id::text,
 async function mark(db,id,state,failure='') {await db.query('UPDATE content_publications SET state=$2,failure=$3,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1',[id,state,failure])}
 async function apply(db,job,record) {
  if(!record||record.deleted_at||String(record.revision)!==String(job.base_revision)){await mark(db,job.id,'stale','Материал изменён или удалён после отправки');return false}
- const approver=(await db.query("SELECT id FROM admin_accounts WHERE id=$1 AND enabled=TRUE AND role IN ('owner','admin') FOR SHARE",[job.reviewed_by])).rows[0]
+ const approver=(await db.query("SELECT id,username,role FROM admin_accounts WHERE id=$1 AND enabled=TRUE AND role IN ('owner','admin') FOR SHARE",[job.reviewed_by])).rows[0]
  if(!approver){await mark(db,job.id,'failed','Учётная запись, одобрившая публикацию, недоступна');return false}
  const data=snapshot(job.kind,job.payload),missing=await checkContentReferences(db,data)
  if(missing){await mark(db,job.id,'failed',missing);return false}
@@ -62,7 +62,9 @@ async function apply(db,job,record) {
  // The source row is locked. Its revision is checked again by the UPDATE itself.
  const saved=await db.query(`UPDATE ${job.kind} SET ${fields.map((k,i)=>k+'=$'+(i+1)).join(',')}${extra} WHERE id=$${args.length+1} AND revision=$${args.length+2} AND deleted_at IS NULL RETURNING revision::text`,[...args,job.record_id,job.base_revision])
  if(!saved.rowCount){await mark(db,job.id,'stale','Материал изменён после отправки');return false}
- await db.query("UPDATE content_publications SET state='published',applied_revision=$2,revision=revision+1,failure='',updated_at=clock_timestamp() WHERE id=$1",[job.id,saved.rows[0].revision]);return true
+ await db.query("UPDATE content_publications SET state='published',applied_revision=$2,revision=revision+1,failure='',updated_at=clock_timestamp() WHERE id=$1",[job.id,saved.rows[0].revision])
+ await db.query('INSERT INTO admin_audit(user_id,username,role,action,resource,status,request_id) VALUES($1,$2,$3,$4,$5,200,$6)',[approver.id,approver.username,approver.role,'publication.publish','/api/admin/'+job.kind+'/publications/'+job.id,'publication-worker'])
+ return true
 }
 export function registerContentPublishing(app,pool,requireAdmin,kind) {
  if(!Object.hasOwn(kinds,kind))throw Error('Invalid content kind')
@@ -88,6 +90,7 @@ export function registerContentPublishing(app,pool,requireAdmin,kind) {
   if(b.mode==='schedule'&&!publisher(req))fail(403,'Назначить публикацию может администратор')
   const publishAt=time(b.publish_at??null)
   if(b.mode==='schedule'&&!publishAt)fail(400,'Выберите время публикации')
+  req.novaAuditAction='publication.submit';req.novaAuditResource=base+'/'+b.request_id
   const data=snapshot(kind,b.payload),hash=createHash('sha256').update(JSON.stringify(stable({kind,id:req.params.id,revision:b.revision,mode:b.mode,payload:data,publish_at:publishAt}))).digest('hex')
   return contentTransaction(pool,req,reply,async(db,reply)=>{
    const record=await lockRecord(db,kind,req.params.id)
@@ -106,6 +109,7 @@ export function registerContentPublishing(app,pool,requireAdmin,kind) {
   if(!uuid(id)||!['approve','reject','cancel'].includes(action)||!contentRevision(b?.revision))fail(400,'Неверное действие или версия заявки')
   if(action!=='cancel'&&!publisher(req))fail(403,'Согласование доступно администратору')
   const note=b.note??'';if(typeof note!=='string'||note.length>2000||note.includes('\0')||action==='reject'&&!note.trim())fail(400,'Укажите комментарий до 2000 символов')
+  req.novaAuditAction='publication.'+action;req.novaAuditResource=base+'/'+id
   const at=action==='approve'?time(b.publish_at??null):null
   return contentTransaction(pool,req,reply,async(db,reply)=>{
    // Always lock the material before its request, also in the scheduler and SQL triggers.
