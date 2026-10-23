@@ -10,7 +10,7 @@ export function useContentEditor(kind,load,emit) {
  const text=()=>e.form?JSON.stringify({payload:payload(),base_revision:e.form.revision||null}):''
  const unsaved=()=>Boolean(e.form&&text()!==baseline&&text()!==savedDraft)
  async function request(url,method='GET',body) {
-  const r=await adminFetch(url,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})})
+  const r=await adminFetch(url,{method,signal:AbortSignal.timeout(15000),...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})})
   const data=r.status===204?null:await r.json()
   if(!r.ok)throw Object.assign(Error(data?.error||'Ошибка запроса'),{status:r.status,...data})
   return data
@@ -39,7 +39,7 @@ export function useContentEditor(kind,load,emit) {
  watch(()=>e.form,()=>{
   if(!ready)return
   changed();clearTimeout(timer)
-  if(unsaved()&&!e.busy&&!e.blocked&&!e.pending)timer=setTimeout(flush,1200)
+  if(unsaved()&&!e.busy&&!e.blocked&&!e.pending){e.status='Есть несохранённые изменения';timer=setTimeout(flush,1200)}
  },{deep:true,flush:'sync'})
  async function open(row) {
   if(e.busy)return
