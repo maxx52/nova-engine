@@ -6,6 +6,7 @@ import {track} from './analytics.js'
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import CheckoutForm from './CheckoutForm.vue'
 import OrderStatus from './OrderStatus.vue'
+import CustomerAccount from './CustomerAccount.vue'
 import ContentPage from './ContentPage.vue'
 import BlogView from './BlogView.vue'
 import CodeFrame from '../../../shared/CodeFrame.vue'
@@ -51,6 +52,24 @@ const categoryRows = ref([])
 const availableAttributes = computed(()=>[...new Set(products.value.filter(p=>selectedCategory.value==='Все товары'||p.category===selectedCategory.value).flatMap(p=>(p.attributes||[]).map(a=>a.name+'::'+a.value)))].sort())
 const descendantNames = computed(()=>{const chosen=categoryRows.value.find(c=>c.name===selectedCategory.value);if(!chosen)return [];const ids=new Set([chosen.id]);let changed=true;while(changed){changed=false;for(const c of categoryRows.value)if(ids.has(c.parent_id)&&!ids.has(c.id)){ids.add(c.id);changed=true}}return categoryRows.value.filter(c=>ids.has(c.id)).map(c=>c.name)})
 const cart = ref([])
+watch(cart,items=>{try{sessionStorage.setItem('nova-cart',JSON.stringify(items.slice(0,50).map(x=>({product_id:x.id,variant_name:x.variantName||'',quantity:x.quantity}))))}catch{}},{deep:true})
+function restoreCart(items){
+ for(const row of items.slice(0,50)){
+  const p=products.value.find(p=>p.id===row.product_id);if(!p||!Number.isInteger(row.quantity)||row.quantity<1)continue
+  const v=p.variants?.find(v=>v.name===row.variant_name)
+  if(row.variant_name&&!v||p.variants?.length&&!v)continue
+  addToCart(p,v,Math.min(100,row.quantity))
+ }
+}
+function openAccount(){if(checkoutLocked.value)return;cartOpen.value=false;checkoutOpen.value=false;activeProduct.value=null;routePath.value='/account';history.pushState({},'','/account');window.scrollTo(0,0)}
+async function repeatOrder(items){
+ if(checkoutLocked.value)throw Error(t.value.checkout_locked)
+ const r=await fetch('/api/products',{credentials:'omit'});if(!r.ok)throw Error('Не удалось проверить товары')
+ products.value=(await r.json()).filter(p=>p.published!==false)
+ const previous=cart.value.map(x=>({product_id:x.id,variant_name:x.variantName,quantity:x.quantity}))
+ cart.value=[];restoreCart(previous);restoreCart(items)
+ cartOpen.value=true;notice.value='Корзина обновлена по текущим ценам и остаткам. Проверьте состав перед оформлением.'
+}
 const loading = ref(true)
 const error = ref('')
 const selectedCategory = ref('Все товары')
@@ -124,6 +143,7 @@ onMounted(async () => {
     products.value = (await response.json()).filter(p=>p.published!==false)
     const cats=await fetch('/api/categories');if(cats.ok)categoryRows.value=await cats.json()
     syncUrl()
+    try{const saved=JSON.parse(sessionStorage.getItem('nova-cart')||'[]');if(Array.isArray(saved))restoreCart(saved)}catch{}
   } catch (e) { if(!settingsReady.value)settingsError.value=e.message;else error.value=e.message }
   finally { loading.value = false }
 })
@@ -140,13 +160,14 @@ onMounted(async () => {
           <a v-for="(item,index) in menuItems" :key="index" :href="item.url" @click="mobileMenu=false">{{item.label}}</a>
         </nav>
         <div class="header-actions">
+          <a href="/account" class="account-link" @click.prevent="openAccount">Личный кабинет</a>
           <button class="icon-button mobile-nav-button" aria-label="Меню" @click="mobileMenu = !mobileMenu">☰</button>
           <button v-if="shopEnabled" class="cart-trigger" :aria-label="t.cart+' '+itemCount" @click="cartOpen = true"><span class="cart-glyph">🛍</span><span class="cart-label">{{t.cart}}</span><span class="cart-count">{{ itemCount }}</span></button>
         </div>
       </div>
     </header></ThemeSlot>
 
-    <OrderStatus v-if="routePath==='/order-status'"/><main v-else-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
+    <OrderStatus v-if="routePath==='/order-status'"/><CustomerAccount v-else-if="/^\/account\/?$/.test(routePath)" :repeat-order="repeatOrder" :locked="checkoutLocked"/><main v-else-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
     <BlogView :design="design" :site-data="publicData" :actions="themeAction" v-else-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" :texts="t" />
     <main v-else-if="isBlogRoute" class="container site-welcome"><h1>{{t.not_found}}</h1><a href="/">{{t.home_link}}</a></main>
     <ContentPage :template-name="routePath==='/'?'home':'page'" :design="design" :actions="themeAction" v-else-if="isContentRoute" :site-data="publicData" :path="contentPath" :site-name="siteSettings.name" :texts="t" />
@@ -216,14 +237,14 @@ onMounted(async () => {
     </main>
     </ThemeSlot><CodeFrame v-if="design.code.enabled && design.code.placement==='footer'" :key="routePath" :code="design.code" :data="publicData" navigation />
     <ThemeSlot v-if="design.visibility.footer" name="footer" :design="design" :data="publicData" :actions="themeAction"><footer class="footer"><div class="container footer-inner"><div class="footer-brand">{{siteSettings.name}}</div><span>{{t.footer_text}}<template v-if="design.visibility.year"> · {{ new Date().getFullYear() }}</template></span><span>{{t.footer_credit}}</span></div></footer></ThemeSlot>
-    <div v-if="shopEnabled" v-show="cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">{{t.cart_kicker}}</span><h2>{{t.cart}} ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><CheckoutForm v-if="checkoutOpen" :items="cart" :texts="t" @locked="checkoutLocked=$event" @complete="orderComplete" @back="checkoutOpen=false; cartOpen=false"/><div v-else-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>{{t.cart_empty}}</h3><p>{{t.cart_hint}}</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">{{t.cart_shop}}</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.cartKey" class="cart-item"><span class="cart-item-art">{{t.fallback_icon}}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length && !checkoutOpen" class="drawer-bottom"><div class="total-row"><span>{{t.cart_total}}</span><strong>{{ currency(cartTotal) }}</strong></div><p>{{t.cart_note}}</p><button class="primary-button" @click="startCheckout">{{t.checkout}}</button></div></aside></div>
+    <div v-if="shopEnabled" v-show="cartOpen" class="drawer-overlay" @click.self="cartOpen = false"><aside class="cart-drawer" aria-label="Корзина"><div class="drawer-header"><div><span class="section-kicker">{{t.cart_kicker}}</span><h2>{{t.cart}} ({{ itemCount }})</h2></div><button class="close-button" aria-label="Закрыть корзину" @click="cartOpen = false">×</button></div><CheckoutForm v-if="checkoutOpen" :items="cart" :texts="t" @account="openAccount" @locked="checkoutLocked=$event" @complete="orderComplete" @back="checkoutOpen=false; cartOpen=false"/><div v-else-if="!cart.length" class="drawer-empty"><span>🛍️</span><h3>{{t.cart_empty}}</h3><p>{{t.cart_hint}}</p><button class="primary-button" @click="cartOpen = false; scrollToCatalog()">{{t.cart_shop}}</button></div><div v-else class="cart-items"><div v-for="item in cart" :key="item.cartKey" class="cart-item"><span class="cart-item-art">{{t.fallback_icon}}</span><div class="cart-item-info"><strong>{{ item.name }}</strong><span>{{ currency(item.price) }}</span><div class="quantity-controls"><button @click="changeQty(item, -1)">−</button><b>{{ item.quantity }}</b><button @click="changeQty(item, 1)">+</button></div></div></div></div><div v-if="cart.length && !checkoutOpen" class="drawer-bottom"><div class="total-row"><span>{{t.cart_total}}</span><strong>{{ currency(cartTotal) }}</strong></div><p>{{t.cart_note}}</p><button class="primary-button" @click="startCheckout">{{t.checkout}}</button></div></aside></div>
     <div v-if="contactFormId" class="drawer-overlay" @click.self="contactFormId=''"><section class="theme-contact-modal" role="dialog" aria-modal="true" aria-label="Обратная связь"><button class="close-button" aria-label="Закрыть форму" @click="contactFormId=''">×</button><ContactForm :key="contactFormId" :form-id="contactFormId"/></section></div>
     <div v-if="notice" class="toast">{{ notice }} ✓</div>
   </div>
 </template>
 
 <style scoped>
-.theme-contact-modal{width:min(680px,calc(100vw - 32px));max-height:90vh;overflow:auto;background:var(--nova-background);padding:18px;border-radius:var(--nova-radius);margin:auto}.theme-contact-modal>.close-button{display:block;margin:0 0 10px auto}
+.account-link{font-size:13px;color:inherit;text-decoration:none}.theme-contact-modal{width:min(680px,calc(100vw - 32px));max-height:90vh;overflow:auto;background:var(--nova-background);padding:18px;border-radius:var(--nova-radius);margin:auto}.theme-contact-modal>.close-button{display:block;margin:0 0 10px auto}
 .site-logo-image { max-width:100px;max-height:48px;object-fit:contain; }
 .site-name { max-width:260px;overflow-wrap:anywhere;line-height:1.2; }
 .site-welcome { min-height:65vh;padding-top:80px;padding-bottom:80px;overflow-wrap:anywhere; }

@@ -4,7 +4,7 @@ export const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-
 export function analyticsPath(value){
  if(typeof value!=='string'||value.length>2000)return null
  const path=value.split(/[?#]/)[0].replace(/\/$/,'')||'/'
- if(path.length>200||/^\/(admin|api|uploads|health)(\/|$)/i.test(path))return null
+ if(path.length>200||/^\/(admin|api|uploads|health|account)(\/|$)/i.test(path))return null
  return /^(\/|\/catalog|\/product\/[1-9][0-9]*|\/blog(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?|\/[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(path)?path:null
 }
 export function referralHost(value){

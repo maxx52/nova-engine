@@ -1,3 +1,4 @@
+import {registerCustomerAccounts} from './customerAccounts.js'
 import {registerPublicationWorker} from './contentPublishing.js'
 import {registerPageLibrary} from './pageLibrary.js'
 import {registerDataTransfer} from './dataTransfer.js'
@@ -64,7 +65,8 @@ const siteOrigin=process.env.PUBLIC_SITE_URL||(security.production?security.orig
 registerFulfillment(app,pool,requireAdmin,{secret:adminKey,siteOrigin})
 const automatic=registerAutomaticPayments(app,pool,requireAdmin,{secret:adminKey,siteOrigin})
 const payments=registerPayments(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins,automaticEnabled:automatic.enabled})
-registerCommerce(app,pool,requireAdmin,{origins:publicOrigins,attribute:analytics.attribute,receipt:payments.receipt})
+const customerAccounts=registerCustomerAccounts(app,pool,{secret:adminKey,secure:security.secure,origins:publicOrigins})
+registerCommerce(app,pool,requireAdmin,{origins:publicOrigins,attribute:analytics.attribute,receipt:payments.receipt,customerCheckout:customerAccounts.checkout})
 registerSeo(app,pool,requireAdmin,{fallbackOrigin:process.env.PUBLIC_SITE_URL||(security.production?security.origins[0]:'http://localhost:5173')})
 
 app.get('/health', async () => {

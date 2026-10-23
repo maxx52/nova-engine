@@ -62,6 +62,8 @@ jobs:
           python3 scripts/check-manager-deployment.py
           npm install --prefix /tmp/nova-ui-test --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
           NOVA_PLAYWRIGHT_MODULE=/tmp/nova-ui-test/node_modules/playwright-core/index.mjs node scripts/check-system-ui.mjs
+      - name: Verify customer accounts with captured mail and isolated PostgreSQL
+        run: NOVA_PLAYWRIGHT_MODULE=/tmp/nova-ui-test/node_modules/playwright-core/index.mjs node scripts/check-customer-ui.mjs
       - name: Diagnostic logs on failure
         if: failure()
         run: |

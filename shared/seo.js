@@ -5,7 +5,7 @@ export function seoPath(value){
  if(/[\s\\?#%\u0000-\u001f\u007f]/u.test(decoded)||decoded.includes('//')||decoded.split('/').some(s=>s==='.'||s==='..'))return null
  const result=encodeURI(decoded).replace(/\/+$/,'')||'/';return result.length<=2000?result:null
 }
-export function protectedSeoPath(path){return /^\/(api|admin|assets|uploads)(\/|$)|^\/(health|robots\.txt|sitemap(?:-\d+)?\.xml)$|^\/\./i.test(path)}
+export function protectedSeoPath(path){return /^\/(api|admin|assets|uploads|account)(\/|$)|^\/(health|robots\.txt|sitemap(?:-\d+)?\.xml)$|^\/\./i.test(path)}
 export function validateSeo(value){
  if(value===undefined)return null
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(defaultSeo(),k)))return 'Некорректные SEO-поля'

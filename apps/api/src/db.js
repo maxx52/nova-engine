@@ -1,3 +1,4 @@
+import {initCustomerAccounts} from './customerAccounts.js'
 import {initContentPublishing} from './contentPublishing.js'
 import {initContentLifecycle} from './contentLifecycle.js'
 import {initPageLibrary} from './pageLibrary.js'
@@ -99,6 +100,7 @@ export async function initDatabase() {
   }
   await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
   await initCommerce(pool)
+  await initCustomerAccounts(pool)
   await initPayments(pool)
   await initFulfillment(pool)
   await initAutomaticPayments(pool)
