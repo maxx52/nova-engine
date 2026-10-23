@@ -57,7 +57,10 @@ export async function runContentPublishingChecks(page) {
   await page.getByRole('button',{name:'Запланировать публикацию',exact:true}).click()
   await page.locator('.page-editor-modal').waitFor({state:'hidden'})
   assert.equal((await live()).data.content,'Approved second proposal')
-  await page.waitForFunction(async slug=>(await (await fetch('/api/pages/'+slug)).json()).content==='Published by timed worker',slug,{timeout:120000,polling:1000})
+  const scheduled=await page.evaluate(async()=> (await (await fetch('/api/admin/pages/publications?state=active')).json()).items.find(r=>r.title==='CI publication workflow'))
+  assert.equal(scheduled.state,'scheduled')
+  const deadline=Date.now()+120000
+  while(Date.now()<deadline){const observed=await live();if(observed.data.content==='Published by timed worker'){assert.ok(Date.now()>=Date.parse(scheduled.scheduled_at),'publication must wait until its scheduled instant');break}await new Promise(r=>setTimeout(r,1000))}
   await refresh(page)
   const result=await live();assert.equal(result.data.revision,'3');assert.equal(result.data.content,'Published by timed worker')
   await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.setViewportSize({width:1280,height:900})
