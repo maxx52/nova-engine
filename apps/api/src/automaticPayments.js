@@ -64,7 +64,7 @@ export function registerAutomaticPayments(app,pool,requireAdmin,{secret,siteOrig
   if(!uuid(b.InvoiceId))reject(400,'Неверный счёт');const a=(await pool.query("SELECT * FROM payment_attempts WHERE id=$1 AND provider='cloudpayments'",[b.InvoiceId])).rows[0];if(!a)reject(400,'Счёт не найден');const c=credentials(a);if(!validHmac(buffer,req.headers['content-hmac'],c.secret))reject(401,'Неверная подпись webhook')
   if(b.OperationType!==undefined&&b.OperationType!=='Payment')reject(400,'Ожидается операция оплаты');if(b.Currency!=='RUB'||amountCents(b.Amount)!==Number(a.amount_cents)||!['0','1',false,true,0,1].includes(b.TestMode)||(['1',1,true].includes(b.TestMode))!==a.test)reject(400,'Сумма, валюта или режим не совпали')
   if(req.params.event==='check'){const o=(await pool.query('SELECT status,payment_state FROM orders WHERE id=$1',[a.order_id])).rows[0];return {code:o?.status!=='cancelled'&&o?.payment_state==='unpaid'?0:20}}
-  if(b.Status!=='Completed')reject(400,'Ожидается завершённая оплата');if(!/^[1-9]\d{0,18}$/.test(String(b.TransactionId)))reject(400,'Неверный номер транзакции');await applyVerifiedPayment(pool,a.id,String(b.TransactionId));return {code:0}
+  if(b.Status!=='Completed')reject(400,'Ожидается завершённая оплата');if(typeof b.TransactionId==='number'&&!Number.isSafeInteger(b.TransactionId)||!/^[1-9]\d{0,18}$/.test(String(b.TransactionId)))reject(400,'Неверный номер транзакции');await applyVerifiedPayment(pool,a.id,String(b.TransactionId));return {code:0}
  }))
  })
  return {enabled:async()=> (await settings()).enabled}

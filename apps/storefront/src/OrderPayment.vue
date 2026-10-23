@@ -4,8 +4,9 @@ import PaymentFrame from '../../../shared/PaymentFrame.vue'
 const props=defineProps({receipt:Object,texts:Object,config:Object})
 const details=ref(null),busy=ref(false),error=ref('')
 async function open(){if(busy.value)return;busy.value=true;error.value='';try{
- const r=await fetch(props.config.automatic?'/api/payments/automatic/checkout':'/api/payments/checkout',{method:'POST',credentials:'omit',headers:{'content-type':'application/json','x-nova-checkout':'1'},body:JSON.stringify({token:props.receipt.payment_token}),signal:AbortSignal.timeout(15000)})
- const data=await r.json();if(!r.ok)throw Error(data.error||props.texts.payment_error);details.value=data
+ const request=async endpoint=>{const r=await fetch(endpoint,{method:'POST',credentials:'omit',headers:{'content-type':'application/json','x-nova-checkout':'1'},body:JSON.stringify({token:props.receipt.payment_token}),signal:AbortSignal.timeout(15000)});const data=await r.json();if(!r.ok)throw Error(data.error||props.texts.payment_error);return data}
+ const current=await request('/api/payments/checkout')
+ details.value=props.config.automatic&&current.order.payment_state==='unpaid'?{...await request('/api/payments/automatic/checkout'),order:current.order}:current
 }catch(e){error.value=e.message}finally{busy.value=false}}
 </script>
 <template><section class="order-payment">

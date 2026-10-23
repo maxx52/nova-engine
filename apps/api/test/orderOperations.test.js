@@ -29,7 +29,7 @@ test('PostgreSQL order operations: authoritative delivery, notifications and aut
  const pg=new PGlite();const query=async(sql,args)=>{const r=await pg.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}}
  let tail=Promise.resolve();const db={query,connect:async()=>{const before=tail;let release;tail=new Promise(r=>release=r);await before;return {query,release}}};pool.query=query;pool.connect=db.connect;await initDatabase();await initDatabase()
  const app=Fastify(),{requireAdmin}=registerAuth(app,db,{setupKey:secret});let providerObject=null,networkCalls=[],createResponse=null
- const fetcher=async(url,options)=>{networkCalls.push({url,method:options.method});return new Response(JSON.stringify(options.method==='POST'?createResponse:providerObject),{status:200,headers:{'content-type':'application/json'}})}
+ const fetcher=async(url,options)=>{networkCalls.push({url,method:options.method});return new Response(JSON.stringify(options.method==='POST'?(typeof createResponse==='function'?createResponse(JSON.parse(options.body)):createResponse):providerObject),{status:200,headers:{'content-type':'application/json'}})}
  registerFulfillment(app,db,requireAdmin,{secret,siteOrigin,worker:false});const automatic=registerAutomaticPayments(app,db,requireAdmin,{secret,siteOrigin,fetcher});const payments=registerPayments(app,db,requireAdmin,{secret,origins:[siteOrigin],automaticEnabled:automatic.enabled});registerCommerce(app,db,requireAdmin,{origins:[siteOrigin],receipt:payments.receipt});app.setErrorHandler(publicErrorHandler)
  const mutation={'x-nova-request':'1',origin:'http://localhost:5174'},setup=await app.inject({method:'POST',url:'/api/auth/setup',headers:mutation,payload:{username:'test_admin',password:'test-temporary-password-only',setup_key:secret}});assert.equal(setup.statusCode,201,setup.body)
  const auth={...mutation,cookie:setup.headers['set-cookie'].split(';')[0],'x-csrf-token':setup.json().csrf_token},pub={'x-nova-checkout':'1',origin:siteOrigin}
@@ -85,6 +85,13 @@ test('PostgreSQL order operations: authoritative delivery, notifications and aut
   const r=await call('POST','/api/payments/automatic/checkout',{token:receipt.payment_token,paid:true},pub);assert.equal(r.statusCode,200,r.body);assert.equal((await order(id)).payment_state,'unpaid');const count=networkCalls.length;assert.equal((await call('POST','/api/payments/automatic/checkout',{token:receipt.payment_token},pub)).statusCode,200);assert.equal(networkCalls.length,count)
   assert.equal((await call('GET','/api/admin/orders/'+id+'/payments')).body.includes('fake-provider-secret'),false)
   assert.equal((await call('POST','/api/payments/automatic/checkout',{token:receipt.payment_token},{...pub,origin:'https://evil.example'})).statusCode,403)
+ })
+ await t.test('YooKassa invoice creation validates response context and refuses foreign payment URLs',async()=>{
+  let settings=(await call('GET','/api/admin/payments/automatic')).json();let saved=await call('PUT','/api/admin/payments/automatic',{...settings,provider:'yookassa',account_id:'fake-shop',secret:'fake-provider-secret'});assert.equal(saved.statusCode,200,saved.body)
+  createResponse=b=>({id:randomUUID(),metadata:b.metadata,recipient:{account_id:'fake-shop'},amount:b.amount,test:true,confirmation:{confirmation_url:'https://yoomoney.ru/checkout/payments/test'}})
+  const {receipt}=await make();let r=await call('POST','/api/payments/automatic/checkout',{token:receipt.payment_token},pub);assert.equal(r.statusCode,200,r.body);assert.ok(r.json().link.startsWith('https://yoomoney.ru/'))
+  const original=createResponse;createResponse=b=>({...original(b),confirmation:{confirmation_url:'https://evil.example/pay'}});const other=await make();r=await call('POST','/api/payments/automatic/checkout',{token:other.receipt.payment_token},pub);assert.equal(r.statusCode,502,r.body);assert.equal((await query('SELECT payment_url FROM payment_attempts WHERE order_id=$1',[other.id])).rows[0].payment_url,'')
+  await query("UPDATE payment_attempts SET created_at=NOW()-INTERVAL '11 minutes' WHERE order_id=$1",[other.id]);const calls=networkCalls.length;r=await call('POST','/api/payments/automatic/checkout',{token:other.receipt.payment_token},pub);assert.equal(r.statusCode,409,r.body);assert.equal(networkCalls.length,calls)
  })
  await t.test('notification snapshots exclude internal notes; missing consent and uncertain sends do not auto resend',async()=>{
   // Earlier events are prepared with notifications disabled: enabling a channel is not retroactive.
