@@ -35,7 +35,7 @@ export function validateSystemCommand(body){
 }
 export function registerSystem(app,requireAdmin,{socketPath=process.env.NOVA_UPDATER_SOCKET,request=agentRequest,check=checkGitHub}={}){
  app.get('/api/admin/system',{preHandler:requireAdmin},async()=>{
-  if(socketPath){try{return {current_version:PRODUCT_VERSION,releases_url:RELEASES_URL,available:true,...await request(socketPath,'/status')}}catch(e){if(e.system)throw e}}
+  if(socketPath){try{const status=await request(socketPath,'/status');return {...status,installed_version:status.current_version||PRODUCT_VERSION,current_version:PRODUCT_VERSION,releases_url:RELEASES_URL,available:true}}catch(e){if(e.system)throw e}}
   const release=await check();return {current_version:PRODUCT_VERSION,releases_url:RELEASES_URL,available:false,reason:'Серверная служба обновления не подключена. Доступна проверка релизов; установку выполняет администратор хостинга.',...release}
  })
  app.post('/api/admin/system/jobs',{preHandler:requireAdmin,bodyLimit:2048},async(req,reply)=>{

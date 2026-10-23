@@ -1,3 +1,4 @@
+import {PRODUCT_VERSION} from '../../../config/release.js'
 import {allowed,registerIdentity} from './identity.js'
 import { randomBytes, createHash, scrypt, timingSafeEqual } from 'node:crypto'
 import {workLimiter} from './security.js'
@@ -70,7 +71,7 @@ export function registerAuth(app,pool,{setupKey,secure=false,origins=['http://lo
    options.preHandler=pre.filter(handler=>handler!==requireAdmin)
   }
  })
- app.addHook('onSend',async(req,reply,payload)=>{if(req.url.startsWith('/api/auth/')||req.url.startsWith('/api/admin/')||req.novaSession)reply.header('Cache-Control','no-store');return payload})
+ app.addHook('onSend',async(req,reply,payload)=>{if(req.novaSession?.user_id)reply.header('X-Nova-Version',PRODUCT_VERSION);if(req.url.startsWith('/api/auth/')||req.url.startsWith('/api/admin/')||req.novaSession)reply.header('Cache-Control','no-store');return payload})
  const identity=registerIdentity(app,pool,{requireAdmin,session,startSession,throttle,trustedMutation,verifyPassword,hashPassword,validPassword,setupKey,now})
  app.get('/api/auth/status',async()=>({setup_required:!(await pool.query('SELECT id FROM admin_accounts LIMIT 1')).rowCount}))
  app.get('/api/auth/me',async(req,reply)=>{const current=await session(req);if(!current)return reply.code(401).send({error:'Войдите в админку'});return {user:{id:current.user_id,username:current.username,role:current.role||'owner'},csrf_token:current.csrf_token}})

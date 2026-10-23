@@ -1,16 +1,17 @@
 <script setup>
 import {computed,onMounted,onUnmounted,ref} from 'vue'
+import {syncAdminVersion} from './adminVersion.js'
 import {adminFetch} from './adminApi.js'
 import {compareVersions} from '../../../shared/releases.js'
 const data=ref(null),error=ref(''),notice=ref(''),busy=ref(false),restoreId=ref(''),confirmation=ref(''),enabled=ref(false),hour=ref(3),retention=ref(7)
 let timer,disposed=false,settingsLoaded=false
-const updateAvailable=computed(()=>data.value?.release&&compareVersions(data.value.release.version,data.value.current_version)>0)
+const updateAvailable=computed(()=>data.value?.release&&compareVersions(data.value.release.version,(data.value.installed_version||data.value.current_version))>0)
 const labels={queued:'В очереди',check:'Проверка GitHub',download:'Загрузка и проверка релиза',dependencies:'Подготовка зависимостей',maintenance:'Включение обслуживания',backup:'Создание полной копии',verify:'Проверка восстановления во временной базе',apply:'Установка релиза',health:'Проверка работоспособности',restore:'Восстановление',done:'Готово'}
 const kinds={check:'Проверка релизов',backup:'Резервная копия',verify:'Проверка копии',update:'Обновление CMS',restore:'Восстановление'}
 const time=value=>value?new Date(value).toLocaleString('ru-RU'):'Ещё не выполнялась'
 const bytes=value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(value/1048576)+' МБ'
 async function load(){
- try{const r=await adminFetch('/api/admin/system');if(!r.ok)throw Error('Сервер временно недоступен. Во время копирования или обновления это ожидаемо; проверка продолжится автоматически.');const value=await r.json();if(disposed)return;data.value=value;error.value='';if(!settingsLoaded&&value.schedule){enabled.value=value.schedule.enabled;hour.value=value.schedule.hour_utc;retention.value=value.schedule.retention_days;settingsLoaded=true}}
+ try{const r=await adminFetch('/api/admin/system');if(!r.ok)throw Error('Сервер временно недоступен. Во время копирования или обновления это ожидаемо; проверка продолжится автоматически.');const value=await r.json();if(disposed)return;data.value=value;syncAdminVersion(value);error.value='';if(!settingsLoaded&&value.schedule){enabled.value=value.schedule.enabled;hour.value=value.schedule.hour_utc;retention.value=value.schedule.retention_days;settingsLoaded=true}}
  catch(e){if(!disposed)error.value=e.message}
 }
 async function command(body){busy.value=true;notice.value='';error.value='';try{const r=await adminFetch('/api/admin/system/jobs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const value=await r.json();if(!r.ok)throw Error(value.error||'Операция отклонена');notice.value=body.kind==='schedule'?'Расписание сохранено':'Операция принята. Страницу можно оставить открытой.';restoreId.value='';confirmation.value='';await load()}catch(e){error.value=e.message}finally{busy.value=false}}
@@ -21,7 +22,8 @@ onUnmounted(()=>{disposed=true;clearInterval(timer)})
 </script>
 <template>
 <section class="system-workspace">
- <div class="system-heading"><div><p class="eyebrow">СИСТЕМА</p><h2>Обновления и резервные копии</h2><p>Установленная версия: <strong>{{data?.current_version||'…'}}</strong></p></div><button class="row-btn" :disabled="busy||!!data?.active" @click="command({kind:'check'})">Проверить релизы</button></div>
+ <div class="system-heading"><div><p class="eyebrow">СИСТЕМА</p><h2>Обновления и резервные копии</h2><p>Установленная версия: <strong>{{data?.installed_version||data?.current_version||'…'}}</strong></p></div><button class="row-btn" :disabled="busy||!!data?.active" @click="command({kind:'check'})">Проверить релизы</button></div>
+ <p v-if="data?.installed_version && data.installed_version!==data.current_version" class="alert" role="status">Файлы CMS: {{data.installed_version}}. Запущенный API: {{data.current_version}}. Дождитесь завершения операции; если расхождение сохранится, требуется проверка запуска API.</p>
  <p v-if="error" class="alert" role="alert">{{error}}</p><p v-if="notice" role="status">{{notice}}</p>
  <div v-if="data?.active" class="system-card" role="status"><h3>{{kinds[data.active.kind]}}</h3><p>{{labels[data.active.phase]||data.active.phase}}…</p><p>Во время согласованного копирования и установки сайт переходит в режим обслуживания. После запуска API страница обновит статус автоматически.</p></div>
  <div class="system-card" v-if="data"><h3>{{updateAvailable?'Доступно обновление '+data.release.version:'Версия CMS'}}</h3><p v-if="data.release&&!updateAvailable">Последний опубликованный релиз: {{data.release.version}}.</p><p v-if="!data.release">Опубликованные стабильные релизы пока не найдены.</p><p>Последняя успешная проверка: {{time(data.checked_at)}}</p><p v-if="data.error" class="alert">{{data.error}}</p><template v-if="data.release"><a :href="data.release.url" target="_blank" rel="noopener noreferrer">Открыть релиз GitHub</a><details><summary>Что изменилось</summary><pre class="release-notes">{{data.release.notes||'Описание не добавлено.'}}</pre></details></template><p v-if="!data.available">{{data.reason}}</p><button v-if="updateAvailable&&data.available" class="primary-btn" :disabled="busy||!!data.active" @click="update">Создать копию и обновить</button><p>Обновление устанавливает согласованные версии API, витрины и админки. Требования пакета и версия API тем проверяются до переключения.</p></div>

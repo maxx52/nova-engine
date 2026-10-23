@@ -1,7 +1,9 @@
+import {releaseVersion} from '../../../shared/releases.js'
 import { reactive } from 'vue'
-export const auth = reactive({user:null,csrf:'',notice:''})
+export const auth = reactive({user:null,csrf:'',notice:'',serverVersion:null})
 export async function adminFetch(url,options={}) {
  const response=await fetch(url,{...options,credentials:'same-origin',headers:{...options.headers,'x-nova-request':'1',...(auth.csrf?{'x-csrf-token':auth.csrf}:{})}})
+ const version=response.headers.get('x-nova-version');if(releaseVersion(version))auth.serverVersion=version
  if(response.status===401&&!['/api/auth/login','/api/auth/setup'].includes(url)&&auth.user){auth.user=null;auth.csrf='';auth.notice='Сессия завершена. Войдите снова.'}
  return response
 }

@@ -1,4 +1,5 @@
 import test from 'node:test'
+import {PRODUCT_VERSION} from '../../../config/release.js'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
 import {PGlite} from '@electric-sql/pglite'
@@ -27,7 +28,7 @@ test('local agent transport uses a Unix socket and surfaces only bounded JSON pr
 test('system API requires an admin session and CSRF, validates commands before contacting the privileged manager',async()=>{
  const pg=new PGlite(),query=async(sql,args)=>{const r=await pg.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}},db={query,connect:async()=>({query,release(){}})};pool.query=query;pool.connect=db.connect;await initDatabase()
  const app=Fastify(),key='system-test-key-32-or-more-characters',calls=[];const {requireAdmin}=registerAuth(app,db,{setupKey:key})
- registerSystem(app,requireAdmin,{socketPath:'/fake/socket',request:async(socket,path,body)=>{calls.push({socket,path,body});return path==='/status'?{protocol:1,backups:[],active:null}:{id:'test-job'}}})
+ registerSystem(app,requireAdmin,{socketPath:'/fake/socket',request:async(socket,path,body)=>{calls.push({socket,path,body});return path==='/status'?{protocol:1,current_version:'99.0.0',backups:[],active:null}:{id:'test-job'}}})
  const headers={'x-nova-request':'1',origin:'http://localhost:5174'}
  try{
   assert.equal((await app.inject({url:'/api/admin/system'})).statusCode,401)
@@ -38,7 +39,7 @@ test('system API requires an admin session and CSRF, validates commands before c
   assert.equal(calls.length,0)
   assert.equal((await app.inject({method:'POST',url:'/api/admin/system/jobs',headers:auth,payload:{kind:'backup',path:'/etc'}})).statusCode,400)
   assert.equal(calls.length,0)
-  const status=await app.inject({url:'/api/admin/system',headers:auth});assert.equal(status.statusCode,200);assert.equal(status.json().available,true)
+  const status=await app.inject({url:'/api/admin/system',headers:auth});assert.equal(status.statusCode,200);assert.equal(status.json().available,true);assert.equal(status.json().current_version,PRODUCT_VERSION);assert.equal(status.json().installed_version,'99.0.0');assert.equal(status.headers['x-nova-version'],PRODUCT_VERSION)
   const request=await app.inject({method:'POST',url:'/api/admin/system/jobs',headers:auth,payload:{kind:'backup'}});assert.equal(request.statusCode,202);assert.deepEqual(calls.at(-1).body,{kind:'backup'})
  }finally{await app.close();await pg.close()}
 })

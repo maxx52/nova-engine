@@ -1,4 +1,6 @@
 <script setup>
+import {adminVersionMismatch} from '../../../shared/adminVersion.js'
+import {refreshAdmin} from './adminVersion.js'
 import {PRODUCT_VERSION} from '../../../config/release.js'
 import SecurityWorkspace from './SecurityWorkspace.vue'
 import SystemWorkspace from './SystemWorkspace.vue'
@@ -103,6 +105,7 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
   <div class="main-area">
     <header class="topbar"><div class="top-left"><button class="menu-toggle" @click="sidebar=!sidebar">☰</button><span>Панель управления</span><span class="breadcrumb">/ {{sections.find(s=>s.id===page)?.label}}</span></div><div class="top-right"><span class="demo-pill">● Панель управления</span><AccountActions /><div class="avatar">A</div></div></header>
     <main class="content">
+      <p v-if="adminVersionMismatch(PRODUCT_VERSION,auth.serverVersion)" class="alert" role="status">Сервер обновлён до {{auth.serverVersion}}, а в этой вкладке открыта админка {{PRODUCT_VERSION}}. Сохраните изменения и обновите страницу. <button class="row-btn" @click="refreshAdmin(auth.serverVersion)">Обновить админку</button></p>
       <div v-if="page==='media'"><div class="page-title"><div><h1>Медиатека</h1><p>Изображения сайта</p></div></div><MediaLibrary /></div>
       <SecurityWorkspace v-if="page==='security'" />
       <FormsWorkspace v-if="page==='forms'" :api-write="apiWrite" />
