@@ -64,6 +64,11 @@ export async function runContentRecoveryChecks(page) {
   page.once('dialog',d=>d.accept());await row(page).getByRole('button',{name:'В корзину',exact:true}).click();await row(page).waitFor({state:'hidden'})
   await page.getByRole('button',{name:'Корзина',exact:true}).click()
   page.once('dialog',d=>d.accept());await row(page).getByRole('button',{name:'Удалить окончательно',exact:true}).click();await row(page).waitFor({state:'hidden'})
+  // The disposable installation starts with the blog disabled.
+  await page.getByRole('button',{name:/Настройки/}).click()
+  await page.getByLabel('Включить блог',{exact:true}).check()
+  await page.getByRole('button',{name:'Сохранить настройки',exact:true}).click()
+  await page.getByRole('button',{name:/Блог/}).waitFor()
   // The article editor uses the same lifecycle, including tags after recovery.
   await page.getByRole('button',{name:/Блог/}).click()
   await page.getByRole('button',{name:'＋ Создать статью',exact:true}).click()
