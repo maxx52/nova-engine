@@ -40,6 +40,11 @@ export async function runContentPublishingChecks(page) {
   await editor.getByText('Комментарий: Уточните формулировку',{exact:true}).waitFor();await close(editor)
   await open(editor);await editor.getByRole('button',{name:'Восстановить личный черновик',exact:true}).click()
   await input(editor).fill('Approved second proposal');await submit(editor)
+  // Cancel and resubmit identical content: this is a new intentional request.
+  await refresh(editor);await review(editor,'На согласовании')
+  editor.once('dialog',d=>d.accept());await editor.getByRole('button',{name:'Отменить заявку',exact:true}).click()
+  await editor.locator('.publication-detail').getByText('Отменено',{exact:true}).waitFor();await close(editor)
+  await open(editor);await editor.getByRole('button',{name:'Восстановить личный черновик',exact:true}).click();await submit(editor)
   await refresh(page);await review(page,'На согласовании')
   page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Одобрить и опубликовать',exact:true}).click()
   await page.locator('.publication-detail').getByText('Опубликовано',{exact:true}).waitFor();await close(page)

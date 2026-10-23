@@ -48,7 +48,7 @@ export function useContentEditor(kind,load,emit) {
    const current=row?.id?await request(base+'/'+row.id):clone(row)
    key=String(current?.id||'new')
    const draft=await request(base+'/drafts/'+key)
-   ready=false;generation++;e.form=current;e.conflict=null;e.historical=null;e.versions=[];e.pending=draft;e.blocked=false
+   ready=false;generation++;submissionKey='';submissionId='';e.form=current;e.conflict=null;e.historical=null;e.versions=[];e.pending=draft;e.blocked=false
    e.liveAtOpen=Boolean(current?.published);e.notice='';e.draftRevision=draft?.revision||'0';baseline=text();savedDraft='';e.status=draft?'Найден ваш личный черновик':'Изменений нет';ready=true;changed()
   }catch(err){e.error=err.message}finally{e.busy=false}
  }
