@@ -62,6 +62,7 @@ try{
  await (await import('./check-seo-ui.mjs')).runSeoChecks(page)
  await (await import('./check-order-operations-ui.mjs')).runOrderOperationsChecks(page)
  await (await import('./check-editor-transfer-ui.mjs')).runEditorTransferChecks(page)
+ await (await import('./check-content-recovery-ui.mjs')).runContentRecoveryChecks(page)
  await (await import('./check-identity-ui.mjs')).runIdentityChecks(page)
  assert.deepEqual(errors,[])
  console.log('PASS system UI: release notes escaped, update is explicit, backup/schedule commands valid, restore requires typed confirmation, mobile width fits; completed update refreshes the admin once')

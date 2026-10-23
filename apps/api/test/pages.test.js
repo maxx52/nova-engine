@@ -32,31 +32,19 @@ test('sections preserve old pages and reject unsafe links and invalid section da
   assert.ok(validateSections(Array.from({length:51},(_,i)=>({...hero,id:String(i)}))))
 })
 
-test('HTTP page writes persist ordered sections as JSON and require admin key', async () => {
-  const { default: Fastify } = await import('fastify')
-  const app = Fastify()
-  const calls = []
-  const pool = { query: async (sql,args) => {
-    calls.push({sql,args})
-    return {rowCount:1,rows:[{id:'7',title:args[0],slug:args[1],content:args[2],published:args[3],sections:JSON.parse(args[4])}]}
-  }}
-  registerPages(app,pool,(req,reply,done)=>{if(req.headers['x-admin-key']!=='secret') return reply.code(401).send({error:'Unauthorized'});done()})
-  try {
-    const section = {id:'image-1',type:'image',title:'',text:'',image_url:'/uploads/00000000-0000-0000-0000-000000000000.jpg',alt:'Фото',caption:'Подпись',button_text:'',button_url:''}
-    const payload={...valid,sections:[section,{...section,id:'text-1',type:'text',text:'Текст'}]}
-    assert.equal((await app.inject({method:'POST',url:'/api/admin/pages',payload})).statusCode,401)
-    assert.equal(calls.length,0)
-    const created=await app.inject({method:'POST',url:'/api/admin/pages',headers:{'x-admin-key':'secret'},payload})
-    assert.equal(created.statusCode,201)
-    assert.deepEqual(created.json().sections,payload.sections)
-    const updated=await app.inject({method:'PUT',url:'/api/admin/pages/7',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[...payload.sections].reverse()}})
-    assert.equal(updated.statusCode,200)
-    assert.equal(updated.json().sections[0].id,'text-1')
-    assert.match(calls[1].sql,/sections=\$5.*WHERE id=\$7/)
-    assert.equal(calls[1].args[6],'7')
-    const rejected=await app.inject({method:'POST',url:'/api/admin/pages',headers:{'x-admin-key':'secret'},payload:{...payload,sections:[{...section,button_url:'javascript:alert(1)'}]}})
-    assert.equal(rejected.statusCode,400);assert.equal(calls.length,2)
-  } finally { await app.close() }
+test('HTTP page writes persist ordered sections and require authentication and current revision',async()=>{
+ const {contentFixture}=await import('./fixtures/content.js'),f=await contentFixture()
+ try{
+  const section={id:'text-1',type:'text',title:'',text:'Text',image_url:'',alt:'',caption:'',button_text:'',button_url:''}
+  const payload={...valid,sections:[section,{...section,id:'text-2',text:'Second'}]}
+  assert.equal((await f.call('POST','/api/admin/pages',payload,{})).statusCode,401)
+  const created=await f.call('POST','/api/admin/pages',payload);assert.equal(created.statusCode,201,created.body)
+  assert.deepEqual(created.json().sections,payload.sections)
+  const updated=await f.call('PUT','/api/admin/pages/'+created.json().id,{...payload,revision:created.json().revision,sections:[...payload.sections].reverse()})
+  assert.equal(updated.statusCode,200,updated.body);assert.equal(updated.json().sections[0].id,'text-2')
+  assert.equal((await f.call('PUT','/api/admin/pages/'+created.json().id,payload)).statusCode,400)
+  assert.equal((await f.call('POST','/api/admin/pages',{...payload,slug:'unsafe',sections:[{...section,button_url:'javascript:alert(1)'}]})).statusCode,400)
+ }finally{await f.close()}
 })
 
 test('code sections validate isolated HTML, CSS and JavaScript with bounded source sizes',()=>{

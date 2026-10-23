@@ -11,7 +11,7 @@ export function validateSettings(body) {
 }
 export async function readSettings(pool) {
   const result = await pool.query(`SELECT s.name,s.logo_url,s.home_page_id::text,s.shop_enabled,s.blog_enabled,s.menu,p.slug AS home_slug
-    FROM site_settings s LEFT JOIN pages p ON p.id=s.home_page_id AND p.published=TRUE WHERE s.id=1`)
+    FROM site_settings s LEFT JOIN pages p ON p.id=s.home_page_id AND p.published=TRUE AND p.deleted_at IS NULL WHERE s.id=1`)
   return result.rows[0] || {...defaultSettings,home_slug:null}
 }
 export function registerSettings(app,pool,requireAdmin) {
@@ -21,7 +21,7 @@ export function registerSettings(app,pool,requireAdmin) {
     if(error)return reply.code(400).send({error})
     const {name,logo_url,home_page_id,shop_enabled,menu}=req.body
     if(home_page_id!==null){
-      const page=await pool.query('SELECT id FROM pages WHERE id=$1 AND published=TRUE',[home_page_id])
+      const page=await pool.query('SELECT id FROM pages WHERE id=$1 AND published=TRUE AND deleted_at IS NULL',[home_page_id])
       if(!page.rowCount)return reply.code(400).send({error:'Выберите опубликованную страницу'})
     }
     try {

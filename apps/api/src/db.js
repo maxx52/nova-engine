@@ -1,3 +1,4 @@
+import {initContentLifecycle} from './contentLifecycle.js'
 import {initPageLibrary} from './pageLibrary.js'
 import {initDataTransfer} from './dataTransfer.js'
 import {initFulfillment} from './fulfillment.js'
@@ -107,6 +108,7 @@ export async function initDatabase() {
   await initSeo(pool)
   await initPageLibrary(pool)
   await initDataTransfer(pool)
+  await initContentLifecycle(pool)
   await initMediaSchema(pool)
 }
 export function productJson(row) { return {...row,id:Number(row.id),price:Number(row.price)} }

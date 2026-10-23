@@ -29,7 +29,7 @@ const role=auth.user.role||'owner'
 const commerceRole=['owner','admin','manager'].includes(role)
 const visibleSections=role==='editor'?['security','pages','blog','products','categories','media']:role==='manager'?['security','orders','customers','analytics']:null
 const page=ref(role==='editor'?'pages':role==='manager'?'orders':'overview')
-const designDirty=ref(false)
+const designDirty=ref(false),contentDirty=ref(false)
 const products=ref([])
 const commerce=ref({orders:0,new_orders:0,customers:0,completed_cents:0})
 async function loadCommerce(){if(!commerceRole)return;commerce.value=await apiWrite('/api/admin/commerce/summary','GET')}
@@ -61,7 +61,7 @@ const sections=computed(()=>allSections.filter(s=>(!visibleSections||visibleSect
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
 const filtered=computed(()=>products.value.filter(p=>p.name.toLowerCase().includes(filter.value.toLowerCase())))
 async function loadCategories(){const r=await adminFetch('/api/categories');if(!r.ok)throw Error('Категории не загружены');categoryRows.value=await r.json()}
-function navigate(id){if(page.value==='design'&&id!=='design'&&designDirty.value&&!confirm('В оформлении есть несохранённые изменения. Перейти без сохранения?'))return;designDirty.value=false;page.value=id;sidebar.value=false;if(id==='overview'&&shopEnabled.value)commerceChanged()}
+function navigate(id){if(id===page.value)return;if(id!==page.value&&contentDirty.value&&!confirm('Личный черновик ещё не сохранён. Перейти и потерять последние изменения?'))return;contentDirty.value=false;if(page.value==='design'&&id!=='design'&&designDirty.value&&!confirm('В оформлении есть несохранённые изменения. Перейти без сохранения?'))return;designDirty.value=false;page.value=id;sidebar.value=false;if(id==='overview'&&shopEnabled.value)commerceChanged()}
 function edit(product=null){editingId.value=product?.id??null;form.value=product?{name:product.name,category:product.category,price:product.price,description:product.description,sku:product.sku||'',stock:product.stock||0,revision:product.revision,image_url:product.image_url||'',published:product.published!==false,images:[...(product.images?.length?product.images:(product.image_url?[product.image_url]:[]))],attributes:(product.attributes||[]).map(a=>({...a})),variants:(product.variants||[]).map(v=>({...v})),seo:{...(product.seo||{})}}:{name:'',category:categories.value[0]||'Другое',price:0,description:'',sku:'',stock:0,image_url:'',published:true,images:[],attributes:[],variants:[]};editorTab.value='main';dialog.value=true}
 async function save(){
   if(busy.value||!form.value.name.trim()||!Number.isFinite(Number(form.value.price))||Number(form.value.price)<0)return
@@ -116,11 +116,11 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
       <FormsWorkspace v-if="page==='forms'" :api-write="apiWrite" />
       <FulfillmentWorkspace v-if="page==='fulfillment'" :api-write="apiWrite"/><PaymentsWorkspace v-if="page==='payments'" :api-write="apiWrite" />
       <AnalyticsWorkspace v-if="page==='analytics'" :api-write="apiWrite" />
-      <BlogWorkspace v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" />
+      <BlogWorkspace @dirty="contentDirty=$event" v-if="page==='blog' && siteSettings.blog_enabled" :api-write="apiWrite" />
       <SystemWorkspace v-if="page==='system'"/><ThemesWorkspace v-if="page==='themes'" :api-write="apiWrite" @design="navigate('design')" @pages="navigate('pages')"/>
       <DesignWorkspace v-if="page==='design'" :api-write="apiWrite" @dirty="designDirty=$event" />
       <SiteSettings v-if="page==='settings'" :api-write="apiWrite" @saved="settingsSaved" />
-      <PagesWorkspace v-if="page==='pages'" :api-write="apiWrite" />
+      <PagesWorkspace @dirty="contentDirty=$event" v-if="page==='pages'" :api-write="apiWrite" />
       <div v-if="page==='overview'">
         <div class="page-title"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Добро пожаловать в NOVA 👋</h1><p>Управляйте содержимым сайта и каталогом в одном месте.</p></div><button v-if="shopEnabled" class="primary-btn" @click="navigate('products');edit()">＋ Добавить товар</button></div>
         <div v-if="shopEnabled && commerceRole" class="stats-grid"><div class="stat-card"><span>Всего товаров</span><strong>{{products.length}}</strong><small>Товары из базы данных</small><div class="stat-icon">▦</div></div><div class="stat-card"><span>Сумма выполненных заказов</span><strong>{{money(commerce.completed_cents/100)}}</strong><small>Стоимость товаров без доставки</small><div class="stat-icon">₽</div></div><div class="stat-card"><span>Заказы</span><strong>{{commerce.orders}}</strong><small>Новых: {{commerce.new_orders}}</small><div class="stat-icon">▤</div></div><div class="stat-card"><span>Покупатели</span><strong>{{commerce.customers}}</strong><small>Карточки по номеру телефона</small><div class="stat-icon">♙</div></div></div>
