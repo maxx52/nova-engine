@@ -1,3 +1,5 @@
+import {initFulfillment} from './fulfillment.js'
+import {initAutomaticPayments} from './automaticPayments.js'
 import {initSeo} from './seo.js'
 import {initIdentitySchema} from './identity.js'
 import {initThemes} from './themes.js'
@@ -94,6 +96,8 @@ export async function initDatabase() {
   await pool.query(`INSERT INTO categories (name) SELECT DISTINCT category FROM products WHERE category <> '' ON CONFLICT (name) DO NOTHING`)
   await initCommerce(pool)
   await initPayments(pool)
+  await initFulfillment(pool)
+  await initAutomaticPayments(pool)
   await initForms(pool)
   await initAnalytics(pool)
   await initDesign(pool)

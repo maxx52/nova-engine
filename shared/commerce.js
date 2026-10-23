@@ -1,5 +1,5 @@
-export const orderStatuses={new:'Новый',confirmed:'Подтверждён',processing:'В работе',shipped:'Передан в доставку',completed:'Выполнен',cancelled:'Отменён'}
-export const orderTransitions={new:['confirmed','cancelled'],confirmed:['processing','cancelled'],processing:['shipped','completed','cancelled'],shipped:['completed'],completed:[],cancelled:[]}
+export const orderStatuses={new:'Новый',confirmed:'Подтверждён',processing:'В работе',ready:'Готов к выдаче',shipped:'Передан в доставку',completed:'Выполнен',cancelled:'Отменён'}
+export const orderTransitions={new:['confirmed','cancelled'],confirmed:['processing','cancelled'],processing:['ready','shipped','completed','cancelled'],ready:['completed','cancelled'],shipped:['completed'],completed:[],cancelled:[]}
 export const deliveryMethods={pickup:'Самовывоз',delivery:'Доставка'}
 export const orderNumber=id=>'N'+String(id).padStart(6,'0')
 export function normalizePhone(value){
@@ -17,6 +17,7 @@ export function validateCheckout(body){
  if(!d||typeof d.method!=='string'||!Object.hasOwn(deliveryMethods,d.method)||typeof d.address!=='string'||d.address.length>1000||d.method==='delivery'&&!d.address.trim())return 'Укажите способ получения и адрес доставки'
  if(typeof body.comment!=='string'||body.comment.length>2000)return 'Комментарий: до 2000 символов'
  if(!Array.isArray(body.items)||!body.items.length||body.items.length>50)return 'В заказе должно быть от 1 до 50 позиций'
+ if(d.option_id!==undefined&&(typeof d.option_id!=='string'||!/^[a-z][a-z0-9_-]{0,31}$/.test(d.option_id))||d.settings_revision!==undefined&&!Number.isInteger(d.settings_revision)||body.notifications_opt_in!==undefined&&typeof body.notifications_opt_in!=='boolean')return 'Проверьте способ доставки и уведомления'
  const keys=new Set()
  for(const item of body.items){
   if(!item||!Number.isSafeInteger(item.product_id)||item.product_id<=0||typeof item.variant_name!=='string'||item.variant_name.length>120||!Number.isInteger(item.quantity)||item.quantity<1||item.quantity>100)return 'Количество каждой позиции: от 1 до 100'

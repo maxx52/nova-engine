@@ -394,3 +394,5 @@ location = /api/payment-frame { include /etc/nova/code-frame-proxy.conf; }
 ### SEO и перенаправления
 
 Метатеги страниц, товаров и статей, Open Graph, canonical, sitemap.xml, robots.txt, HTTP-редиректы и Schema.org: [docs/SEO.md](docs/SEO.md). Для существующего nginx требуется однократное подключение публичных страниц к API.
+
+Статусы заказов, уведомления, серверная оплата и доставка: [руководство](docs/ORDERS.md).

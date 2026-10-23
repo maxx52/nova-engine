@@ -5,6 +5,7 @@ import {validateThemeAction} from '../../../shared/themes.js'
 import {track} from './analytics.js'
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import CheckoutForm from './CheckoutForm.vue'
+import OrderStatus from './OrderStatus.vue'
 import ContentPage from './ContentPage.vue'
 import BlogView from './BlogView.vue'
 import CodeFrame from '../../../shared/CodeFrame.vue'
@@ -145,7 +146,7 @@ onMounted(async () => {
       </div>
     </header></ThemeSlot>
 
-    <main v-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
+    <OrderStatus v-if="routePath==='/order-status'"/><main v-else-if="customHome"><CodeFrame :code="design.code" :data="publicData" navigation /></main>
     <BlogView :design="design" :site-data="publicData" :actions="themeAction" v-else-if="isBlogRoute && siteSettings.blog_enabled" :path="routePath" :site-name="siteSettings.name" :texts="t" />
     <main v-else-if="isBlogRoute" class="container site-welcome"><h1>{{t.not_found}}</h1><a href="/">{{t.home_link}}</a></main>
     <ContentPage :template-name="routePath==='/'?'home':'page'" :design="design" :actions="themeAction" v-else-if="isContentRoute" :site-data="publicData" :path="contentPath" :site-name="siteSettings.name" :texts="t" />

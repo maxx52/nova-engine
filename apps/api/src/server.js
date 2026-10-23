@@ -1,3 +1,5 @@
+import {registerFulfillment} from './fulfillment.js'
+import {registerAutomaticPayments} from './automaticPayments.js'
 import {registerSeo} from './seo.js'
 import {validateSeo,normalizedSeo} from '../../../shared/seo.js'
 import {registerSystem} from './system.js'
@@ -51,7 +53,10 @@ registerShopGuard(app,pool,isAdmin)
 const publicOrigins=[...security.origins,...(security.production?[]:['http://localhost:5173','http://127.0.0.1:5173'])]
 const analytics=registerAnalytics(app,pool,requireAdmin,isAdmin,{secret:adminKey,origins:publicOrigins})
 registerForms(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins})
-const payments=registerPayments(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins})
+const siteOrigin=process.env.PUBLIC_SITE_URL||(security.production?security.origins[0]:'http://localhost:5173')
+registerFulfillment(app,pool,requireAdmin,{secret:adminKey,siteOrigin})
+const automatic=registerAutomaticPayments(app,pool,requireAdmin,{secret:adminKey,siteOrigin})
+const payments=registerPayments(app,pool,requireAdmin,{secret:adminKey,origins:publicOrigins,automaticEnabled:automatic.enabled})
 registerCommerce(app,pool,requireAdmin,{origins:publicOrigins,attribute:analytics.attribute,receipt:payments.receipt})
 registerSeo(app,pool,requireAdmin,{fallbackOrigin:process.env.PUBLIC_SITE_URL||(security.production?security.origins[0]:'http://localhost:5173')})
 

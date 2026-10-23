@@ -7,7 +7,7 @@ export const paymentProviders = [
  {id:'paykeeper',name:'PayKeeper',url:'https://docs.paykeeper.ru/metody-integratsii/iframe/',hint:'Ссылка, HTML-форма или iframe. Добавьте точный HTTPS-домен вашего платёжного сервера из кабинета PayKeeper.',origins:[]},
  {id:'other',name:'Другой сервис',url:'',hint:'Используйте публичную форму, выданную вашим платёжным сервисом.',origins:[]}
 ]
-export const paymentStates={unpaid:'Не подтверждена',paid:'Оплата подтверждена вручную',refunded:'Возврат подтверждён вручную'}
+export const paymentStates={unpaid:'Не подтверждена',paid:'Оплата подтверждена',refunded:'Возврат подтверждён'}
 export const defaultPayments={enabled:false,provider:'yookassa',mode:'link',title:'Оплата заказа',instructions:'Укажите номер заказа при оплате. Подтверждение поступления проверяет менеджер.',link:'',code:'',origins:[],revision:1}
 export function validPaymentOrigin(value,siteOrigins=[]){
  if(typeof value!=='string'||value.length>250)return false

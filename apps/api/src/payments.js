@@ -1,3 +1,4 @@
+import {orderEvent,orderStatusTokens} from './fulfillment.js'
 import {createHmac,timingSafeEqual} from 'node:crypto'
 import {defaultPayments,validatePayments,paymentStates} from '../../../shared/payments.js'
 import {orderNumber} from '../../../shared/commerce.js'
@@ -28,12 +29,13 @@ export async function recordPayment(pool,orderId,body){
   if(row.revision!==body.revision)fail(409,'Заказ изменился. Обновите карточку.')
   if(body.state==='paid'&&row.status==='cancelled')fail(409,'Нельзя подтвердить оплату отменённого заказа')
   if(!(row.payment_state==='unpaid'&&body.state==='paid'||row.payment_state==='paid'&&body.state==='refunded'))fail(409,'Недоступный переход статуса оплаты')
-  await db.query('UPDATE orders SET payment_state=$1,revision=revision+1,updated_at=NOW() WHERE id=$2',[body.state,orderId])
+  await db.query("UPDATE orders SET payment_state=$1::varchar,payment_review=CASE WHEN $1::varchar='refunded' THEN FALSE ELSE payment_review END,revision=revision+1,updated_at=NOW() WHERE id=$2",[body.state,orderId])
   await db.query('INSERT INTO order_history(order_id,status,message) VALUES($1,$2,$3)',[orderId,row.status,paymentStates[body.state]+'. Основание: '+body.reference.trim()])
+  await orderEvent(db,orderId,body.state)
   await db.query('COMMIT');return {ok:true}
  }catch(e){await db.query('ROLLBACK');throw e}finally{db.release()}
 }
-export function registerPayments(app,pool,requireAdmin,{secret,origins=[]}){
+export function registerPayments(app,pool,requireAdmin,{secret,origins=[],automaticEnabled=async()=>false}){
  // Separate HTTP document: data:/srcdoc frames inherit the main page CSP and cannot run provider scripts.
  // Both the response and the iframe sandbox omit allow-same-origin. No parent bridge for payment status.
  app.get('/api/payment-frame',{config:{novaCodeFrame:true}},async(req,reply)=>{
@@ -44,7 +46,7 @@ export function registerPayments(app,pool,requireAdmin,{secret,origins=[]}){
  const tokens=paymentTokens(secret)
  const protect=handler=>async(req,reply)=>{try{return await handler(req,reply)}catch(e){if(e.payment)return reply.code(e.statusCode).send({error:e.message});throw e}}
  const publicConfig=c=>({enabled:c.enabled,title:c.title,instructions:c.instructions})
- app.get('/api/payments/config',async()=>publicConfig(await readPayments(pool)))
+ app.get('/api/payments/config',async()=>({...publicConfig(await readPayments(pool)),automatic:await automaticEnabled()}))
  app.get('/api/admin/payments',{preHandler:requireAdmin},()=>readPayments(pool))
  app.put('/api/admin/payments',{preHandler:requireAdmin,bodyLimit:130000},protect(async(req)=>{
   const error=validatePayments(req.body,origins);if(error)fail(400,error)
@@ -71,5 +73,5 @@ export function registerPayments(app,pool,requireAdmin,{secret,origins=[]}){
   return {order,...publicConfig(c),mode:c.mode,link:c.link,...(c.mode==='widget'?{code:c.code,origins:c.origins}:{})}
  }))
  app.put('/api/admin/orders/:id/payment',{preHandler:requireAdmin,bodyLimit:3000},protect(req=>recordPayment(pool,req.params.id,req.body)))
- return {receipt:(row,requestId)=>({number:orderNumber(row.id),total_cents:Number(row.total_cents),currency:'RUB',payment_token:tokens.issue(requestId)})}
+ return {receipt:(row,requestId)=>({number:orderNumber(row.id),total_cents:Number(row.total_cents),currency:'RUB',payment_token:tokens.issue(requestId),status_token:orderStatusTokens(secret).issue(requestId)})}
 }

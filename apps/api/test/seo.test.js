@@ -28,6 +28,7 @@ test('SEO PostgreSQL workflow: saved fields, initial HTML, robots, segmented sit
  registerSeo(app,db,requireAdmin,{fallbackOrigin:'https://shop.example',template:async()=>'<html><head><title>Default</title></head><body><div id="app"></div><script src="/assets/app.js"></script></body></html>'});app.setErrorHandler(publicErrorHandler)
  const call=(method,url,payload,headers={})=>app.inject({method,url,payload,headers:{'x-nova-request':'1',...headers}})
  try{
+  const statusPage=await call('GET','/order-status');assert.equal(statusPage.statusCode,200);assert.equal(statusPage.headers['x-robots-tag'],'noindex, nofollow');assert.ok(!statusPage.body.includes('rel="canonical"'))
   assert.equal((await call('GET','/api/admin/seo')).statusCode,401)
   const setup=await call('POST','/api/auth/setup',{username:'seo_owner',password,setup_key:key});assert.equal(setup.statusCode,201,setup.body)
   const owner={cookie:setup.headers['set-cookie'].split(';')[0],'x-csrf-token':setup.json().csrf_token}

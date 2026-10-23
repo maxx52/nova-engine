@@ -1,3 +1,4 @@
+import {quoteShipping,orderEvent} from './fulfillment.js'
 import {createHash} from 'node:crypto'
 import {normalizePhone,validEmail,validateCheckout,orderStatuses,orderTransitions,orderNumber} from '../../../shared/commerce.js'
 const fail=(statusCode,message)=>{throw Object.assign(Error(message),{statusCode,commerce:true})}
@@ -30,6 +31,9 @@ export async function createOrder(pool,body,{attribute=async()=>null,receipt=pub
  const error=validateCheckout(body);if(error)fail(400,error)
  // Canonical payload excludes all client prices, totals and status fields.
  const input={customer:{name:body.customer.name.trim(),phone:normalizePhone(body.customer.phone),email:body.customer.email.trim().toLowerCase()},delivery:{method:body.delivery.method,address:body.delivery.method==='delivery'?body.delivery.address.trim():''},comment:body.comment.trim(),items:body.items.map(x=>({product_id:x.product_id,variant_name:x.variant_name,quantity:x.quantity})).sort((a,b)=>a.product_id-b.product_id||a.variant_name.localeCompare(b.variant_name))}
+ if(body.delivery.option_id!==undefined)input.delivery.option_id=body.delivery.option_id
+ if(body.delivery.settings_revision!==undefined)input.delivery.settings_revision=body.delivery.settings_revision
+ if(body.notifications_opt_in!==undefined)input.notifications_opt_in=body.notifications_opt_in
  const sessionHash=await attribute(body.analytics)
  const hash=digest(JSON.stringify(input)),db=await pool.connect()
  try{
@@ -55,12 +59,14 @@ export async function createOrder(pool,body,{attribute=async()=>null,receipt=pub
    source.stock-=item.quantity
    items.push({...item,name:product.name,sku:source.sku,unit_cents:cents})
   }
+  const shipping=await quoteShipping(db,body.delivery,total);total+=shipping.cents;if(!Number.isSafeInteger(total)||total>99999999999999)fail(400,'Превышена сумма заказа')
   for(const product of rows)await db.query('UPDATE products SET stock=$1,variants=$2,revision=revision+1,updated_at=NOW() WHERE id=$3',[product.stock,JSON.stringify(product.variants),product.id])
   await db.query('INSERT INTO customers (name,phone,email) VALUES ($1,$2,$3) ON CONFLICT (phone) DO NOTHING',[input.customer.name,input.customer.phone,input.customer.email])
   const customer=(await db.query('SELECT id FROM customers WHERE phone=$1',[input.customer.phone])).rows[0]
-  const order=(await db.query(`INSERT INTO orders (customer_id,customer_name,phone,email,delivery_method,address,comment,total_cents,analytics_session_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id::text,total_cents`,[customer.id,input.customer.name,input.customer.phone,input.customer.email,input.delivery.method,input.delivery.address,input.comment,total,sessionHash])).rows[0]
+  const order=(await db.query(`INSERT INTO orders (customer_id,customer_name,phone,email,delivery_method,address,comment,total_cents,analytics_session_hash,delivery_cents,delivery_snapshot,notifications_opt_in) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id::text,total_cents`,[customer.id,input.customer.name,input.customer.phone,input.customer.email,input.delivery.method,input.delivery.address,input.comment,total,sessionHash,shipping.cents,JSON.stringify(shipping.snapshot),body.notifications_opt_in===true])).rows[0]
   for(const item of items)await db.query('INSERT INTO order_items (order_id,product_id,name,variant_name,sku,quantity,unit_cents) VALUES ($1,$2,$3,$4,$5,$6,$7)',[order.id,item.product_id,item.name,item.variant_name,item.sku,item.quantity,item.unit_cents])
   await db.query('INSERT INTO order_history (order_id,status,message) VALUES ($1,$2,$3)',[order.id,'new','Заказ оформлен. Товары списаны с доступного остатка.'])
+  await orderEvent(db,order.id,'new')
   await db.query('UPDATE order_requests SET order_id=$1 WHERE request_id=$2',[order.id,body.request_id])
   await db.query('COMMIT');return receipt(order,body.request_id)
  }catch(e){await db.query('ROLLBACK');throw e}finally{db.release()}
@@ -91,6 +97,7 @@ export async function updateOrder(pool,orderId,body){
   }
   await db.query('UPDATE orders SET status=$1,admin_note=$2,revision=revision+1,updated_at=NOW() WHERE id=$3',[body.status,body.admin_note,orderId])
   await db.query('INSERT INTO order_history (order_id,status,message) VALUES ($1,$2,$3)',[orderId,body.status,[body.status===row.status?'Изменена заметка администратора.':'Статус: '+orderStatuses[body.status]+'.',...(body.status==='cancelled'&&row.status!=='cancelled'?['Остатки существующих товаров и вариантов возвращены.']:[]),...notes].join(' ')])
+  if(body.status!==row.status)await orderEvent(db,orderId,'status')
   await db.query('COMMIT')
  }catch(e){await db.query('ROLLBACK');throw e}finally{db.release()}
 }

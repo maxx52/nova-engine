@@ -55,7 +55,7 @@ test('PostgreSQL payments: authenticated settings, receipt privacy, manual recon
   assert.equal((await call('PUT','/api/admin/payments',{...c,origins:['https://shop.nova.ru']})).statusCode,400)
   const saved=await call('PUT','/api/admin/payments',c);assert.equal(saved.statusCode,200,saved.body);c=saved.json();assert.equal(c.revision,2)
   assert.equal((await call('PUT','/api/admin/payments',{...c,revision:1})).statusCode,409)
-  const pub=(await call('GET','/api/payments/config')).json();assert.deepEqual(Object.keys(pub).sort(),['enabled','instructions','title'])
+  const pub=(await call('GET','/api/payments/config')).json();assert.deepEqual(Object.keys(pub).sort(),['automatic','enabled','instructions','title'])
   await query('UPDATE products SET stock=4,price=12.34 WHERE id=1')
   const input={request_id:randomUUID(),customer:{name:'Payment Test',phone:'+79991112233',email:'private@example.invalid'},delivery:{method:'pickup',address:''},comment:'private comment',items:[{product_id:1,variant_name:'',quantity:2}],payment_state:'paid',total_cents:1}
   const receipt=await createOrder(db,input,{receipt:payments.receipt}),id=(await query('SELECT id::text FROM orders')).rows[0].id

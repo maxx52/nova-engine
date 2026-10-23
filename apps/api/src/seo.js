@@ -25,6 +25,7 @@ const crumb=(origin,items)=>({'@type':'BreadcrumbList',itemListElement:items.map
 export async function resolveSeo(db,raw,{fallbackOrigin}={}){
  const input=new URL(raw,'https://nova.invalid'),path=seoPath(input.pathname)
  if(!path||protectedSeoPath(path))return {status:404,metadata:{title:'Страница не найдена',description:'',robots:'noindex, nofollow',canonical:'',graph:[]},content:'<h1>Страница не найдена</h1>'}
+ if(path==='/order-status')return {status:200,metadata:{title:'Статус заказа',description:'',robots:'noindex, nofollow',canonical:'',graph:[]},content:'<h1>Статус заказа</h1>'}
  const {config,origin}=await seoConfig(db,fallbackOrigin),site=await readSettings(db)
  const redirect=(await db.query('SELECT target,status FROM seo_redirects WHERE source=$1',[path])).rows[0];if(redirect)return {status:redirect.status,redirect:redirect.target}
  let row=null,seo={},title=site.name,description=config.description,image='',type='website',status=200,canonicalPath=path,content='',graph=[],items=[]
