@@ -113,13 +113,14 @@ export function useContentEditor(kind,load,emit) {
  }
  function keepLocal() {
   if(e.conflict?.deleted_at)return
+  e.liveAtOpen=Boolean(e.conflict.published);if(e.isEditor)e.form.published=e.liveAtOpen
   e.form.revision=String(e.conflict.revision);e.conflict=null;e.error='';e.status='Проверьте результат и нажмите «Сохранить»'
  }
  async function loadServer() {
   if(e.conflict?.deleted_at)return
   // Keep private local work until explicitly discarded, and offer it on next open.
   if(!await flush())return
-  const current=e.conflict;ready=false;e.form=clone(current);baseline=text();savedDraft='';e.conflict=null;e.error='';ready=true;changed()
+  const current=e.conflict;ready=false;e.liveAtOpen=Boolean(current.published);e.form=clone(current);baseline=text();savedDraft='';e.conflict=null;e.error='';ready=true;changed()
  }
  async function trash(row,operation='trash') {
   const question=operation==='purge'?'Удалить «'+row.title+'» окончательно вместе с историей и личными черновиками всех редакторов?':operation==='restore'?'Восстановить «'+row.title+'» как неопубликованный черновик?':'Переместить «'+row.title+'» в корзину?'
