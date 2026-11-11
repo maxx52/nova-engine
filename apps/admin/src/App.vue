@@ -1,5 +1,5 @@
 <script setup>
-import BookingWorkspace from './BookingWorkspace.vue'
+import BookingHost from './BookingHost.vue'
 import SeoEditor from './SeoEditor.vue'
 import SeoWorkspace from './SeoWorkspace.vue'
 import {adminVersionMismatch} from '../../../shared/adminVersion.js'
@@ -113,7 +113,7 @@ onMounted(async()=>{try{siteSettings.value=await apiWrite('/api/settings','GET')
       <p v-if="adminVersionMismatch(PRODUCT_VERSION,auth.serverVersion)" class="alert" role="status">Сервер обновлён до {{auth.serverVersion}}, а в этой вкладке открыта админка {{PRODUCT_VERSION}}. Сохраните изменения и обновите страницу. <button class="row-btn" @click="refreshAdmin(auth.serverVersion)">Обновить админку</button></p>
       <div v-if="page==='media'"><div class="page-title"><div><h1>Медиатека</h1><p>Изображения сайта</p></div></div><MediaLibrary /></div>
       <DataTransferWorkspace v-if="page==='transfer'" :api-write="apiWrite"/><SeoWorkspace v-if="page==='seo'" :api-write="apiWrite" />
-      <BookingWorkspace v-if="page==='booking'" :api-write="apiWrite" :user-role="role" />
+      <BookingHost v-if="page==='booking'" :api-write="apiWrite" :user-role="role" />
       <SecurityWorkspace v-if="page==='security'" />
       <FormsWorkspace v-if="page==='forms'" :api-write="apiWrite" />
       <FulfillmentWorkspace v-if="page==='fulfillment'" :api-write="apiWrite"/><PaymentsWorkspace v-if="page==='payments'" :api-write="apiWrite" />

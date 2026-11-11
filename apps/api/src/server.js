@@ -57,7 +57,11 @@ if (!adminKey || adminKey.length < 16) {
   process.exit(1)
 }
 const {requireAdmin,isAdmin}=registerAuth(app,pool,{setupKey:adminKey,secure:security.secure,origins:security.origins})
-if(process.env.NOVA_BOOKING_ENABLED === 'true') bookingRuntime.registerBooking(app,pool,requireAdmin)
+if(process.env.NOVA_BOOKING_ENABLED === 'true') {
+ bookingRuntime.registerBooking(app,pool,requireAdmin)
+ app.get('/api/admin/booking/runtime',{preHandler:requireAdmin},async()=>bookingRuntime.uiBytes?{mode:'external',version:bookingRuntime.version}:{mode:'bundled'})
+ if(bookingRuntime.uiBytes)app.get('/api/admin/booking/interface.js',{preHandler:requireAdmin},async(req,reply)=>reply.type('text/javascript; charset=utf-8').header('Cache-Control','private, no-store').send(bookingRuntime.uiBytes))
+}
 registerUploads(app,pool,requireAdmin,uploadDirectory)
 registerMedia(app,pool,requireAdmin,uploadDirectory)
 registerPages(app, pool, requireAdmin)
