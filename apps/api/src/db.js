@@ -1,3 +1,4 @@
+import {migrateBooking} from './booking/index.js'
 import {initCustomerAccounts} from './customerAccounts.js'
 import {initContentPublishing} from './contentPublishing.js'
 import {initContentLifecycle} from './contentLifecycle.js'
@@ -28,7 +29,7 @@ const seeds = [
   ['Механическая клавиатура','Электроника',6990,'Для работы и игр.'],
   ['Органайзер для стола','Дом',990,'Порядок на рабочем месте.']
 ]
-export async function initDatabase() {
+export async function initDatabase({booking}={}) {
   await pool.query(`CREATE TABLE IF NOT EXISTS admin_accounts (
     id INTEGER PRIMARY KEY CHECK (id=1), username VARCHAR(64) NOT NULL UNIQUE, password_hash TEXT NOT NULL
   )`)
@@ -41,6 +42,7 @@ export async function initDatabase() {
   await pool.query('CREATE INDEX IF NOT EXISTS auth_throttle_expiry_idx ON auth_throttle(reset_at)')
   await pool.query('CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at)')
   await initIdentitySchema(pool)
+  if(process.env.NOVA_BOOKING_ENABLED === 'true') await (booking?.migrateBooking||migrateBooking)(pool)
   await pool.query(`CREATE TABLE IF NOT EXISTS pages (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(150) NOT NULL,
