@@ -1,7 +1,7 @@
 import {createHash,createPublicKey,verify} from 'node:crypto'
 import {readFile,lstat,readdir} from 'node:fs/promises'
 import {join} from 'node:path'
-const files=['server/index.js','admin/BookingWorkspace.vue']
+const files=['server/index.js','admin/booking-ui.js']
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex')
 export const bookingPackageFiles=Object.freeze(files)
 export function validateManifest(m){
@@ -26,7 +26,7 @@ export async function verifyBookingPackage(dir,{trustedPublicKey}={}){
   if(signature.length!==64||signature.toString('base64')!==text)throw Error('Invalid signature encoding')
   if(!verify(null,manifestBytes,key,signature))throw Error('Package signature verification failed')
  }
- for(const [folder,expected] of [['server','index.js'],['admin','BookingWorkspace.vue']]){const s=await lstat(join(dir,folder));if(!s.isDirectory()||s.isSymbolicLink())throw Error('Invalid package directory');if((await readdir(join(dir,folder))).join(',')!==expected)throw Error('Unexpected package entries')}
+ for(const [folder,expected] of [['server','index.js'],['admin','booking-ui.js']]){const s=await lstat(join(dir,folder));if(!s.isDirectory()||s.isSymbolicLink())throw Error('Invalid package directory');if((await readdir(join(dir,folder))).join(',')!==expected)throw Error('Unexpected package entries')}
  for(const name of files){const path=join(dir,name),s=await lstat(path),expected=manifest.files[name];if(!s.isFile()||s.isSymbolicLink()||s.size!==expected.size)throw Error('Package file size mismatch: '+name);const bytes=await readFile(path);if(bytes.length!==expected.size||digest(bytes)!==expected.sha256)throw Error('Package file checksum mismatch: '+name)}
  return manifest
 }

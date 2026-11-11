@@ -4,12 +4,14 @@ import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 import {spawnSync} from 'node:child_process'
+import {pathToFileURL} from 'node:url'
 import {verifyBookingPackage} from '../src/booking/package/manifest.js'
 test('Booking package verifies only declared bounded files and detects tampering',async()=>{
  const temp=await mkdtemp(join(tmpdir(),'nova-booking-package-')),dir=join(temp,'package'),script=resolve('scripts/booking-package.mjs')
  try{
   const build=spawnSync(process.execPath,[script,'build',dir],{encoding:'utf8'});assert.equal(build.status,0,build.stderr)
   assert.equal((await verifyBookingPackage(dir)).version,'0.1.0')
+  const ui=await import(pathToFileURL(join(dir,'admin/booking-ui.js')).href);assert.equal(typeof ui.mountBooking,'function');assert.throws(()=>ui.mountBooking(null,{}),/Invalid Booking host context/)
   assert.notEqual(spawnSync(process.execPath,[script,'build',dir],{encoding:'utf8'}).status,0)
   const file=join(dir,'server/index.js'),original=await readFile(file);await writeFile(file,Buffer.concat([original,Buffer.from('x')]))
   await assert.rejects(verifyBookingPackage(dir),/mismatch/);await writeFile(file,original)

@@ -12,8 +12,11 @@ try{
   await mkdir(dir,{recursive:false,mode:0o700})
   try{
    await mkdir(join(dir,'server'));await mkdir(join(dir,'admin'))
-   const inputs={'server/index.js':'apps/api/src/booking/index.js','admin/BookingWorkspace.vue':'apps/admin/src/BookingWorkspace.vue'},files={}
-   for(const [target,source] of Object.entries(inputs)){const bytes=await readFile(join(root,source));files[target]=fileMetadata(bytes);await writeFile(join(dir,target),bytes,{flag:'wx',mode:0o600})}
+   const {build}=await import('vite'),{default:vue}=await import('@vitejs/plugin-vue')
+   await build({configFile:false,root,plugins:[vue()],logLevel:'silent',build:{outDir:join(dir,'admin'),emptyOutDir:false,lib:{entry:join(root,'apps/admin/src/bookingEntry.js'),formats:['es'],fileName:()=> 'booking-ui.js'},rollupOptions:{output:{inlineDynamicImports:true}}}})
+   const server=await readFile(join(root,'apps/api/src/booking/index.js')),ui=await readFile(join(dir,'admin/booking-ui.js'))
+   await writeFile(join(dir,'server/index.js'),server,{flag:'wx',mode:0o600})
+   const files={'server/index.js':fileMetadata(server),'admin/booking-ui.js':fileMetadata(ui)}
    const manifest={format:'nova-booking-package-v1',version:'0.1.0',module_api:1,schema_version:1,nova_min:'0.28.0',nova_max:'0.28.0',files}
    await writeFile(join(dir,'manifest.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o600})
   }catch(e){await rm(dir,{recursive:true,force:true});throw e}
