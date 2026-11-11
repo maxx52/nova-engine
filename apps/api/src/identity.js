@@ -7,6 +7,7 @@ export function allowed(role,method,path){
  if(role==='admin')return !/^\/api\/admin\/(system|accounts|audit)(\/|$)/.test(path)
  if(role==='editor'&&['GET','HEAD'].includes(method)&&['/api/admin/packages','/api/admin/packages/template/:id','/api/admin/forms'].includes(path))return true
  if(role==='editor')return /^\/api\/(admin\/(pages|posts|media)(\/|$)|products(\/|$)|categories(\/|$)|uploads$)/.test(path)
+ if(role==='manager'&&/^\/api\/admin\/booking(\/|$)/.test(path))return true
  if(role==='manager')return /^\/api\/admin\/(orders|customers|commerce)(\/|$)/.test(path)||['GET','HEAD'].includes(method)&&['/api/admin/analytics','/api/admin/analytics/settings'].includes(path)
  return false
 }

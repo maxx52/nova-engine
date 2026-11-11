@@ -1,3 +1,4 @@
+import {migrateBooking} from './booking/index.js'
 import {initCustomerAccounts} from './customerAccounts.js'
 import {initContentPublishing} from './contentPublishing.js'
 import {initContentLifecycle} from './contentLifecycle.js'
@@ -41,6 +42,7 @@ export async function initDatabase() {
   await pool.query('CREATE INDEX IF NOT EXISTS auth_throttle_expiry_idx ON auth_throttle(reset_at)')
   await pool.query('CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at)')
   await initIdentitySchema(pool)
+  if(process.env.NOVA_BOOKING_ENABLED === 'true') await migrateBooking(pool)
   await pool.query(`CREATE TABLE IF NOT EXISTS pages (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(150) NOT NULL,

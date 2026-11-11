@@ -1,3 +1,4 @@
+import {registerBooking} from './booking/index.js'
 import {registerCustomerAccounts} from './customerAccounts.js'
 import {registerPublicationWorker} from './contentPublishing.js'
 import {registerPageLibrary} from './pageLibrary.js'
@@ -45,6 +46,7 @@ if (!adminKey || adminKey.length < 16) {
   process.exit(1)
 }
 const {requireAdmin,isAdmin}=registerAuth(app,pool,{setupKey:adminKey,secure:security.secure,origins:security.origins})
+if(process.env.NOVA_BOOKING_ENABLED === 'true') registerBooking(app,pool,requireAdmin)
 registerUploads(app,pool,requireAdmin,uploadDirectory)
 registerMedia(app,pool,requireAdmin,uploadDirectory)
 registerPages(app, pool, requireAdmin)
