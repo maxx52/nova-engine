@@ -5,8 +5,10 @@ export async function migrateBooking(pool) {
   await db.query('BEGIN')
   await db.query("SELECT pg_advisory_xact_lock(hashtext('nova.booking.migrations'))")
   await db.query('CREATE TABLE IF NOT EXISTS nova_booking_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())')
-  const done=await db.query('SELECT version FROM nova_booking_migrations WHERE version=1')
-  if(!done.rows.length){
+  const history=await db.query('SELECT version FROM nova_booking_migrations ORDER BY version')
+  const versions=history.rows.map(row=>Number(row.version))
+  if(versions.some((version,index)=>version!==index+1)||versions.some(version=>version>1))throw Error('Booking schema history is incompatible with this module version')
+  if(!versions.length){
    await db.query(`CREATE TABLE nova_booking_organizations (id BIGSERIAL PRIMARY KEY, name VARCHAR(150) NOT NULL CHECK(length(trim(name))>0), profile TEXT NOT NULL CHECK(profile IN ('universal','dentistry','beauty','automotive')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
    await db.query(`CREATE TABLE nova_booking_memberships (organization_id BIGINT NOT NULL REFERENCES nova_booking_organizations(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES admin_accounts(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK(role IN ('owner','manager','viewer')), PRIMARY KEY(organization_id,user_id))`)
    await db.query('CREATE INDEX nova_booking_memberships_user_idx ON nova_booking_memberships(user_id,organization_id)')

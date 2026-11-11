@@ -70,3 +70,17 @@ test('booking uses NOVA sessions, CSRF, role checks and revocation immediately',
   assert.equal((await call('GET',`/api/admin/booking/organizations/${org}/branches`,undefined,manager)).statusCode,404)
  }finally{await app.close();await pg.close()}
 })
+
+test('booking rejects newer or broken migration history without changing data',async()=>{
+ const db=new PGlite(),query=async(sql,args)=>{const r=await db.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}},pool={query,connect:async()=>({query,release(){}})}
+ try{
+  await query('CREATE TABLE admin_accounts(id INTEGER PRIMARY KEY)')
+  await migrateBooking(pool)
+  await query("INSERT INTO nova_booking_organizations(name,profile) VALUES('Kept','universal')")
+  await query('INSERT INTO nova_booking_migrations(version) VALUES(2)')
+  await assert.rejects(migrateBooking(pool),/incompatible/)
+  assert.equal((await query('SELECT name FROM nova_booking_organizations')).rows[0].name,'Kept')
+  await query('DELETE FROM nova_booking_migrations WHERE version=1')
+  await assert.rejects(migrateBooking(pool),/incompatible/)
+ }finally{await db.close()}
+})
