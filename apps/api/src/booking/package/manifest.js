@@ -5,8 +5,8 @@ const files=['server/index.js','admin/BookingWorkspace.vue']
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex')
 export const bookingPackageFiles=Object.freeze(files)
 export function validateManifest(m){
- if(!m||typeof m!=='object'||Array.isArray(m)||Object.keys(m).sort().join(',')!=='files,format,module_api,nova_max,nova_min,version')throw Error('Invalid manifest')
- if(m.format!=='nova-booking-package-v1'||m.module_api!==1||!/^\d+\.\d+\.\d+$/.test(m.version)||m.nova_min!=='0.28.0'||m.nova_max!=='0.28.0')throw Error('Unsupported package compatibility')
+ if(!m||typeof m!=='object'||Array.isArray(m)||Object.keys(m).sort().join(',')!=='files,format,module_api,nova_max,nova_min,schema_version,version')throw Error('Invalid manifest')
+ if(m.format!=='nova-booking-package-v1'||m.module_api!==1||m.schema_version!==1||!/^\d+\.\d+\.\d+$/.test(m.version)||m.nova_min!=='0.28.0'||m.nova_max!=='0.28.0')throw Error('Unsupported package compatibility')
  if(!m.files||typeof m.files!=='object'||Array.isArray(m.files)||Object.keys(m.files).sort().join(',')!==[...files].sort().join(','))throw Error('Invalid package files')
  for(const name of files){const entry=m.files[name];if(!entry||Object.keys(entry).sort().join(',')!=='sha256,size'||!Number.isSafeInteger(entry.size)||entry.size<1||entry.size>1024*1024||!/^([a-f0-9]{64})$/.test(entry.sha256))throw Error('Invalid package file metadata')}
  return m

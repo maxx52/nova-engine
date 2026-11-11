@@ -14,7 +14,7 @@ try{
    await mkdir(join(dir,'server'));await mkdir(join(dir,'admin'))
    const inputs={'server/index.js':'apps/api/src/booking/index.js','admin/BookingWorkspace.vue':'apps/admin/src/BookingWorkspace.vue'},files={}
    for(const [target,source] of Object.entries(inputs)){const bytes=await readFile(join(root,source));files[target]=fileMetadata(bytes);await writeFile(join(dir,target),bytes,{flag:'wx',mode:0o600})}
-   const manifest={format:'nova-booking-package-v1',version:'0.1.0',module_api:1,nova_min:'0.28.0',nova_max:'0.28.0',files}
+   const manifest={format:'nova-booking-package-v1',version:'0.1.0',module_api:1,schema_version:1,nova_min:'0.28.0',nova_max:'0.28.0',files}
    await writeFile(join(dir,'manifest.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o600})
   }catch(e){await rm(dir,{recursive:true,force:true});throw e}
  }
