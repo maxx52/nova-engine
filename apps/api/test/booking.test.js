@@ -27,3 +27,38 @@ test('booking migration is repeatable and routes isolate organizations and roles
   assert.equal((await call('POST','/api/admin/booking/organizations',{name:'X'},'2')).statusCode,403)
  }finally{await app.close();await pg.close()}
 })
+
+test('booking uses NOVA sessions, CSRF, role checks and revocation immediately',async()=>{
+ const {initIdentitySchema}=await import('../src/identity.js')
+ const {registerAuth,hashPassword}=await import('../src/auth.js')
+ const pg=new PGlite();const query=async(sql,args)=>{const r=await pg.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}};let tail=Promise.resolve()
+ const pool={query,connect:async()=>{const prev=tail;let release;tail=new Promise(r=>release=r);await prev;return {query,release}}}
+ await query('CREATE TABLE admin_accounts(id INTEGER PRIMARY KEY CHECK(id=1),username VARCHAR(64) NOT NULL UNIQUE,password_hash TEXT NOT NULL)')
+ await query('CREATE TABLE admin_sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER REFERENCES admin_accounts(id),csrf_token TEXT,expires_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ DEFAULT NOW())')
+ await query('CREATE TABLE auth_throttle(key TEXT PRIMARY KEY,attempts INTEGER,reset_at TIMESTAMPTZ)')
+ await initIdentitySchema(pool);await migrateBooking(pool)
+ const hash=await hashPassword('booking-password-2026')
+ await query("INSERT INTO admin_accounts(id,username,password_hash,role) VALUES (1,'owner',$1,'owner'),(2,'manager',$1,'manager'),(3,'editor',$1,'editor')",[hash])
+ const app=Fastify();const {requireAdmin}=registerAuth(app,pool,{setupKey:'booking-test-key-at-least-32-characters'});registerBooking(app,pool,requireAdmin)
+ const call=(method,url,payload,headers={})=>app.inject({method,url,payload,headers:{'x-nova-request':'1',...headers}})
+ const login=async username=>{const r=await call('POST','/api/auth/login',{username,password:'booking-password-2026'});assert.equal(r.statusCode,200,r.body);return {cookie:r.headers['set-cookie'].split(';')[0],'x-csrf-token':r.json().csrf_token}}
+ try{
+  const owner=await login('owner'),manager=await login('manager'),editor=await login('editor')
+  assert.equal((await call('GET','/api/admin/booking/organizations')).statusCode,401)
+  assert.equal((await call('GET','/api/admin/booking/organizations',undefined,editor)).statusCode,403)
+  assert.equal((await call('POST','/api/admin/booking/organizations',{name:'Denied'}, {cookie:owner.cookie})).statusCode,403)
+  const orgResponse=await call('POST','/api/admin/booking/organizations',{name:'One'},owner);assert.equal(orgResponse.statusCode,201,orgResponse.body);const org=orgResponse.json().id
+  const org2Response=await call('POST','/api/admin/booking/organizations',{name:'Two'},owner);const org2=org2Response.json().id
+  assert.equal((await call('POST',`/api/admin/booking/organizations/${org}/members`,{user_id:'2',role:'manager'},owner)).statusCode,200)
+  assert.equal((await call('POST',`/api/admin/booking/organizations/${org}/branches`,{name:'A',timezone:'UTC'},manager)).statusCode,201)
+  assert.equal((await call('GET',`/api/admin/booking/organizations/${org2}/branches`,undefined,manager)).statusCode,404)
+  assert.equal((await call('GET','/api/admin/booking/organizations?page=0',undefined,owner)).statusCode,400)
+  await query("INSERT INTO nova_booking_branches(organization_id,name,timezone) SELECT $1,'Branch '||n,'UTC' FROM generate_series(1,51) n",[org])
+  const first=(await call('GET',`/api/admin/booking/organizations/${org}/branches?page=1`,undefined,manager)).json(),second=(await call('GET',`/api/admin/booking/organizations/${org}/branches?page=2`,undefined,manager)).json()
+  assert.equal(first.branches.length,50);assert.equal(first.has_more,true);assert.equal(second.branches.length,2);assert.equal(second.has_more,false)
+  assert.equal(new Set([...first.branches,...second.branches].map(x=>x.id)).size,52)
+  assert.equal((await call('DELETE',`/api/admin/booking/organizations/${org}/members/1`,undefined,owner)).statusCode,404)
+  assert.equal((await call('DELETE',`/api/admin/booking/organizations/${org}/members/2`,undefined,owner)).statusCode,204)
+  assert.equal((await call('GET',`/api/admin/booking/organizations/${org}/branches`,undefined,manager)).statusCode,404)
+ }finally{await app.close();await pg.close()}
+})

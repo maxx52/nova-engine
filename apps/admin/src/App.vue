@@ -28,7 +28,7 @@ const siteSettings=ref({shop_enabled:true})
 const shopEnabled=computed(()=>siteSettings.value.shop_enabled)
 const role=auth.user.role||'owner'
 const commerceRole=['owner','admin','manager'].includes(role)
-const visibleSections=role==='editor'?['security','pages','blog','products','categories','media']:role==='manager'?['security','orders','customers','analytics']:null
+const visibleSections=role==='editor'?['security','pages','blog','products','categories','media']:role==='manager'?['security','orders','customers','analytics','booking']:null
 const page=ref(role==='editor'?'pages':role==='manager'?'orders':'overview')
 const designDirty=ref(false),contentDirty=ref(false)
 const products=ref([])
