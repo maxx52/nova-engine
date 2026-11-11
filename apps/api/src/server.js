@@ -1,4 +1,5 @@
-import {registerBooking} from './booking/index.js'
+import * as bundledBooking from './booking/index.js'
+import {loadBookingRuntime} from './booking/package/runtime.js'
 import {registerCustomerAccounts} from './customerAccounts.js'
 import {registerPublicationWorker} from './contentPublishing.js'
 import {registerPageLibrary} from './pageLibrary.js'
@@ -32,6 +33,8 @@ import { config } from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import { pool, initDatabase, productJson } from './db.js'
 config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) })
+const externalBookingConfigured=['NOVA_BOOKING_PACKAGE_STORE','NOVA_BOOKING_PACKAGE_VERSION','NOVA_BOOKING_TRUSTED_KEY'].some(name=>Boolean(process.env[name]))
+const bookingRuntime=process.env.NOVA_BOOKING_ENABLED==='true'&&externalBookingConfigured ? await loadBookingRuntime({store:process.env.NOVA_BOOKING_PACKAGE_STORE,version:process.env.NOVA_BOOKING_PACKAGE_VERSION,keyPath:process.env.NOVA_BOOKING_TRUSTED_KEY,coreVersion:PRODUCT_VERSION}) : bundledBooking
 const security=securityConfig()
 const app = Fastify({logger:{level:process.env.LOG_LEVEL||'info',serializers:{req:req=>({method:req.method,url:req.url?.split('?')[0],remoteAddress:req.ip})},redact:['req.headers.cookie','req.headers["x-admin-key"]','req.headers["x-csrf-token"]','password','setup_key','current_password','new_password']},trustProxy:security.trustProxy,bodyLimit:2*1024*1024,routerOptions:{maxParamLength:2000},requestTimeout:15000,connectionTimeout:10000,keepAliveTimeout:5000})
 app.server.headersTimeout=10000
@@ -46,7 +49,7 @@ if (!adminKey || adminKey.length < 16) {
   process.exit(1)
 }
 const {requireAdmin,isAdmin}=registerAuth(app,pool,{setupKey:adminKey,secure:security.secure,origins:security.origins})
-if(process.env.NOVA_BOOKING_ENABLED === 'true') registerBooking(app,pool,requireAdmin)
+if(process.env.NOVA_BOOKING_ENABLED === 'true') bookingRuntime.registerBooking(app,pool,requireAdmin)
 registerUploads(app,pool,requireAdmin,uploadDirectory)
 registerMedia(app,pool,requireAdmin,uploadDirectory)
 registerPages(app, pool, requireAdmin)
@@ -135,7 +138,7 @@ app.post('/api/categories',{preHandler:requireAdmin},async(request,reply)=>{
 app.setErrorHandler(publicErrorHandler)
 try {
   if(security.production)await assertDatabaseRole(pool)
-  await initDatabase()
+  await initDatabase({booking:bookingRuntime})
   await syncMedia(pool,uploadDirectory)
   await app.listen({port:Number(process.env.PORT||3001),host:process.env.API_HOST||'127.0.0.1'})
 } catch(error) {app.log.error(error);await pool.end();process.exit(1)}
