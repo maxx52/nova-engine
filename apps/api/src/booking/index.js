@@ -38,12 +38,28 @@ export function registerBooking(app,pool,requireAdmin){
   if(!name(label)||!profiles.includes(profile))return reply.code(400).send({error:'Проверьте название и профиль'})
   const db=await pool.connect();try{await db.query('BEGIN');const org=(await db.query('INSERT INTO nova_booking_organizations(name,profile) VALUES($1,$2) RETURNING id::text,name,profile',[label.trim(),profile])).rows[0];await db.query("INSERT INTO nova_booking_memberships(organization_id,user_id,role) VALUES($1,$2,'owner')",[org.id,req.novaSession.user_id]);await db.query('COMMIT');req.novaAuditAction='booking.organization.create';req.novaAuditResource='/api/admin/booking/organizations/'+org.id;return reply.code(201).send(org)}catch(e){await db.query('ROLLBACK');throw e}finally{db.release()}
  })
+ app.put('/api/admin/booking/organizations/:orgId',options,async(req,reply)=>{
+  if(!await access(req,reply,['owner']))return
+  const {name:label,profile}=req.body||{}
+  if(!name(label)||!profiles.includes(profile))return reply.code(400).send({error:'Проверьте название и профиль'})
+  const r=await pool.query('UPDATE nova_booking_organizations SET name=$1,profile=$2 WHERE id=$3 RETURNING id::text,name,profile',[label.trim(),profile,req.params.orgId])
+  if(!r.rowCount)return reply.code(404).send({error:'Организация не найдена'})
+  req.novaAuditAction='booking.organization.update';req.novaAuditResource='/api/admin/booking/organizations/'+req.params.orgId;return r.rows[0]
+ })
  app.get('/api/admin/booking/organizations/:orgId/branches',options,async(req,reply)=>{if(!await access(req,reply))return;const page=pagination(req,reply);if(!page)return;const r=await pool.query('SELECT id::text,name,timezone,address FROM nova_booking_branches WHERE organization_id=$1 ORDER BY id LIMIT 51 OFFSET $2',[req.params.orgId,(page-1)*50]);return pageResult('branches',r.rows,page)})
  app.post('/api/admin/booking/organizations/:orgId/branches',options,async(req,reply)=>{
   if(!await access(req,reply,['owner','manager']))return
   const {name:label,timezone,address=''}=req.body||{}
   if(!name(label)||!zone(timezone)||typeof address!=='string'||address.length>300)return reply.code(400).send({error:'Проверьте название, адрес и часовой пояс IANA'})
   const r=await pool.query('INSERT INTO nova_booking_branches(organization_id,name,timezone,address) VALUES($1,$2,$3,$4) RETURNING id::text,name,timezone,address',[req.params.orgId,label.trim(),timezone,address.trim()]);req.novaAuditAction='booking.branch.create';req.novaAuditResource='/api/admin/booking/organizations/'+req.params.orgId+'/branches/'+r.rows[0].id;return reply.code(201).send(r.rows[0])
+ })
+ app.put('/api/admin/booking/organizations/:orgId/branches/:branchId',options,async(req,reply)=>{
+  if(!await access(req,reply,['owner','manager']))return
+  const {name:label,timezone,address=''}=req.body||{}
+  if(!id(req.params.branchId)||!name(label)||!zone(timezone)||typeof address!=='string'||address.length>300)return reply.code(400).send({error:'Проверьте данные филиала и часовой пояс IANA'})
+  const r=await pool.query('UPDATE nova_booking_branches SET name=$1,timezone=$2,address=$3 WHERE organization_id=$4 AND id=$5 RETURNING id::text,name,timezone,address',[label.trim(),timezone,address.trim(),req.params.orgId,req.params.branchId])
+  if(!r.rowCount)return reply.code(404).send({error:'Филиал не найден'})
+  req.novaAuditAction='booking.branch.update';req.novaAuditResource='/api/admin/booking/organizations/'+req.params.orgId+'/branches/'+req.params.branchId;return r.rows[0]
  })
  app.get('/api/admin/booking/organizations/:orgId/members',options,async(req,reply)=>{if(!await access(req,reply,['owner']))return;const page=pagination(req,reply);if(!page)return;const r=await pool.query('SELECT a.id::text,a.username,a.enabled,a.role AS nova_role,m.role FROM nova_booking_memberships m JOIN admin_accounts a ON a.id=m.user_id WHERE m.organization_id=$1 ORDER BY a.id LIMIT 51 OFFSET $2',[req.params.orgId,(page-1)*50]);return pageResult('members',r.rows,page)})
  app.post('/api/admin/booking/organizations/:orgId/members',options,async(req,reply)=>{

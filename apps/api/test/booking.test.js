@@ -19,10 +19,18 @@ test('booking migration is repeatable and routes isolate organizations and roles
   let res=await call('POST','/api/admin/booking/organizations',{name:'Клиника',profile:'dentistry'});assert.equal(res.statusCode,201,res.body);const org=res.json().id
   assert.equal((await call('POST',`/api/admin/booking/organizations/${org}/branches`,{name:'Центр',timezone:'bad/time'})).statusCode,400)
   res=await call('POST',`/api/admin/booking/organizations/${org}/branches`,{name:'Центр',timezone:'Asia/Barnaul'});assert.equal(res.statusCode,201,res.body)
+  const branchId=res.json().id
+  const other=await call('POST','/api/admin/booking/organizations',{name:'Другой'});const otherId=other.json().id
+  assert.equal((await call('PUT',`/api/admin/booking/organizations/${org}`,{name:'Клиника 2',profile:'beauty'})).statusCode,200)
+  assert.equal((await call('PUT',`/api/admin/booking/organizations/${org}`,{name:'Клиника',profile:'invalid'})).statusCode,400)
+  assert.equal((await call('PUT',`/api/admin/booking/organizations/${otherId}/branches/${branchId}`,{name:'X',timezone:'UTC'})).statusCode,404)
+  assert.equal((await call('PUT',`/api/admin/booking/organizations/${org}/branches/${branchId}`,{name:'Новый адрес',timezone:'UTC'})).statusCode,200)
   assert.equal((await call('GET',`/api/admin/booking/organizations/${org}/branches`,undefined,'3')).statusCode,404)
   assert.equal((await call('POST',`/api/admin/booking/organizations/${org}/members`,{user_id:'2',role:'viewer'})).statusCode,200)
   assert.equal((await call('GET',`/api/admin/booking/organizations/${org}/branches`,undefined,'2')).json().branches.length,1)
   assert.equal((await call('POST',`/api/admin/booking/organizations/${org}/branches`,{name:'X',timezone:'UTC'},'2')).statusCode,404)
+  assert.equal((await call('PUT',`/api/admin/booking/organizations/${org}/branches/${branchId}`,{name:'X',timezone:'UTC'},'2')).statusCode,404)
+  assert.equal((await call('PUT',`/api/admin/booking/organizations/${org}`,{name:'X',profile:'universal'},'2')).statusCode,404)
   assert.equal((await call('POST',`/api/admin/booking/organizations/${org}/members`,{user_id:'1',role:'manager'})).statusCode,409)
   assert.equal((await call('POST','/api/admin/booking/organizations',{name:'X'},'2')).statusCode,403)
  }finally{await app.close();await pg.close()}
