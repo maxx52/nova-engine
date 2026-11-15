@@ -1,4 +1,3 @@
-import * as bundledBooking from './booking/index.js'
 import {loadBookingRuntime} from './booking/package/runtime.js'
 import {readBookingSelection} from './booking/package/selection.js'
 import {registerCustomerAccounts} from './customerAccounts.js'
@@ -35,7 +34,11 @@ import { fileURLToPath } from 'node:url'
 import { pool, initDatabase, productJson } from './db.js'
 config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) })
 const externalBookingConfigured=['NOVA_BOOKING_PACKAGE_STORE','NOVA_BOOKING_PACKAGE_VERSION','NOVA_BOOKING_TRUSTED_KEY','NOVA_BOOKING_USE_SELECTION'].some(name=>Boolean(process.env[name]))
-let bookingRuntime=bundledBooking
+let bookingRuntime=null
+if(process.env.NOVA_BOOKING_ENABLED==='true'&&!externalBookingConfigured){
+ if(process.env.NODE_ENV==='production'||process.env.NOVA_BOOKING_DEV_BUNDLED!=='true')throw Error('Install and select a signed Booking package before enabling the module')
+ bookingRuntime=await import('./booking/index.js')
+}
 if(process.env.NOVA_BOOKING_ENABLED==='true'&&externalBookingConfigured){
  const {NOVA_BOOKING_PACKAGE_STORE:store,NOVA_BOOKING_PACKAGE_VERSION:configuredVersion,NOVA_BOOKING_TRUSTED_KEY:keyPath,NOVA_BOOKING_USE_SELECTION:useSelection}=process.env
  if(useSelection&&useSelection!=='true'||useSelection==='true'&&configuredVersion||useSelection==='true'&&!store)throw Error('Invalid Booking runtime selection configuration')

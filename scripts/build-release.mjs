@@ -11,7 +11,7 @@ const output=resolve(process.argv[2]||'/tmp/nova-release')
 await mkdir(output,{recursive:true})
 for(const file of ['apps/admin/dist/index.html','apps/storefront/dist/index.html'])await stat(file)
 const name='nova-'+release.version+'.tar.gz',archive=resolve(output,name)
-const result=spawnSync('tar',['-czf',archive,'--exclude=node_modules','--exclude=.git','--exclude=.env','--exclude=.env.*','--exclude=uploads','--exclude=setup-key','--exclude=__pycache__','--exclude=*.pyc','package.json','package-lock.json','apps','config','shared','examples','deploy','scripts','docs','README.md','SECURITY.md'],{stdio:'inherit'})
+const result=spawnSync('tar',['-czf',archive,'--exclude=node_modules','--exclude=.git','--exclude=.env','--exclude=.env.*','--exclude=uploads','--exclude=setup-key','--exclude=__pycache__','--exclude=*.pyc','--exclude=apps/api/src/booking/index.js','--exclude=apps/admin/src/BookingWorkspace.vue','--exclude=apps/admin/src/bookingEntry.js','--exclude=apps/api/test/booking*.test.js','--exclude=scripts/booking-package.mjs','--exclude=scripts/booking-schema.mjs','package.json','package-lock.json','apps','config','shared','examples','deploy','scripts','docs','README.md','SECURITY.md'],{stdio:'inherit'})
 if(result.status!==0)throw Error('Release archive failed')
 const hash=createHash('sha256');for await(const chunk of createReadStream(archive))hash.update(chunk)
 const manifest={format:'nova-release',...release,artifact:{name,size:(await stat(archive)).size,sha256:hash.digest('hex')}}
